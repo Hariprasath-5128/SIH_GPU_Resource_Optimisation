@@ -65,6 +65,7 @@ class Job(Base):
     actual_cost = Column(Float, nullable=True)
     input_hash = Column(String, nullable=True)
     output_hash = Column(String, nullable=True)
+    output_file_path = Column(String, nullable=True)
     verified = Column(Boolean, default=False)
     submitted_at = Column(DateTime, default=datetime.utcnow)
     started_at = Column(DateTime, nullable=True)

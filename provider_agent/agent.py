@@ -170,6 +170,22 @@ class ProviderAgent:
             try:
                 result = worker.run()
                 print(f"[Agent] Job {job_id} completed. Output: {result.get('output_path', 'N/A')}")
+                
+                zip_file = result.get("zip_file")
+                if zip_file and os.path.exists(zip_file):
+                    print(f"[Agent] Uploading output zip to coordinator...")
+                    try:
+                        with open(zip_file, "rb") as f:
+                            files = {"file": (os.path.basename(zip_file), f, "application/zip")}
+                            requests.post(
+                                f"{self.coordinator_url}/api/jobs/{job_id}/upload_output",
+                                files=files,
+                                timeout=60
+                            )
+                        print(f"[Agent] Upload complete.")
+                    except Exception as e:
+                        print(f"[Agent] Failed to upload output zip: {e}")
+
                 try:
                     requests.post(
                         f"{self.coordinator_url}/api/jobs/{job_id}/complete",

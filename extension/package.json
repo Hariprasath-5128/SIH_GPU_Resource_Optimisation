@@ -3,7 +3,7 @@
   "displayName": "GPUShare — Peer GPU Sharing",
   "publisher": "local-dev",
   "description": "Intelligent peer-to-peer GPU sharing. Submit AI workloads to a friend's GPU.",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "engines": { "vscode": "^1.85.0" },
   "categories": ["Machine Learning"],
   "activationEvents": ["onStartupFinished"],

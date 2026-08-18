@@ -5,7 +5,10 @@ import uuid
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect
+import os
+import shutil
+from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -379,11 +382,42 @@ async def save_checkpoint(job_id: str, req: CheckpointReq, db: Session = Depends
     db.commit()
     return {"status": "ok"}
 
-class CompleteReq(BaseModel):
+class JobCompleteReq(BaseModel):
     output_hash: str
 
+@app.post("/api/jobs/{job_id}/upload_output")
+async def upload_job_output(job_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    job = db.query(Job).filter(Job.job_id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+        
+    os.makedirs("artifacts", exist_ok=True)
+    file_path = os.path.join("artifacts", f"{job_id}_{file.filename}")
+    
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    job.output_file_path = file_path
+    db.commit()
+    return {"status": "ok", "file_path": file_path}
+
+@app.get("/api/jobs/{job_id}/download_output")
+async def download_job_output(job_id: str, db: Session = Depends(get_db)):
+    job = db.query(Job).filter(Job.job_id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+        
+    if not job.output_file_path or not os.path.exists(job.output_file_path):
+        raise HTTPException(status_code=404, detail="Output file not found for this job")
+        
+    return FileResponse(
+        path=job.output_file_path,
+        filename=os.path.basename(job.output_file_path),
+        media_type="application/zip"
+    )
+
 @app.post("/api/jobs/{job_id}/complete")
-async def complete_job(job_id: str, req: CompleteReq, db: Session = Depends(get_db)):
+async def complete_job(job_id: str, req: JobCompleteReq, db: Session = Depends(get_db)):
     job = db.query(Job).filter(Job.job_id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")

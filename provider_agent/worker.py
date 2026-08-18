@@ -150,11 +150,18 @@ class YOLOWorker:
             if os.path.exists(final_model_path)
             else "unknown"
         )
+        
+        # Zip the output directory
+        import shutil
+        zip_path = os.path.join(self.checkpoint_dir, f"{self.job_id}_output")
+        shutil.make_archive(zip_path, 'zip', self.checkpoint_dir)
+        zip_file = f"{zip_path}.zip"
 
         return {
             "output_path": final_model_path,
             "output_hash": output_hash,
             "epochs_completed": epochs,
+            "zip_file": zip_file
         }
 
     # ──────────────────────────────────────────────────────────────────────

@@ -10,6 +10,28 @@ let consumerPanel = null;
 let providerPanel = null;
 let providerProcess = null;
 let pollInterval = null;
+let downloadedJobs = new Set();
+const { exec } = require('child_process');
+
+function downloadFile(urlStr, dest) {
+    return new Promise((resolve, reject) => {
+        const file = fs.createWriteStream(dest);
+        const protocol = urlStr.startsWith('https') ? https : http;
+        const req = protocol.get(urlStr, (res) => {
+            if (res.statusCode !== 200) {
+                reject(new Error(`Failed to download: ${res.statusCode}`));
+                return;
+            }
+            res.pipe(file);
+            file.on('finish', () => {
+                file.close(resolve);
+            });
+        }).on('error', (err) => {
+            fs.unlink(dest, () => reject(err));
+        });
+        req.on('error', reject);
+    });
+}
 
 function requestApi(urlStr, options = {}, postData = null) {
     return new Promise((resolve, reject) => {
@@ -227,6 +249,41 @@ function startPolling() {
             const jobs = await requestApi(`${coordinatorUrl}/api/jobs`).catch(() => []);
             if (providerPanel) providerPanel.webview.postMessage({ type: 'jobsUpdated', data: jobs });
             if (consumerPanel) consumerPanel.webview.postMessage({ type: 'jobsUpdated', data: jobs });
+            
+            if (Array.isArray(jobs)) {
+                for (const job of jobs) {
+                    if (job.status === 'COMPLETED' && !downloadedJobs.has(job.job_id)) {
+                        downloadedJobs.add(job.job_id);
+                        
+                        const workspacePath = vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders[0].uri.fsPath : __dirname;
+                        const outputDir = path.join(workspacePath, 'GPUShare_Outputs');
+                        if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
+                        
+                        const zipPath = path.join(outputDir, `${job.job_id}.zip`);
+                        const extractDir = path.join(outputDir, job.job_id);
+                        
+                        vscode.window.showInformationMessage(`Job ${job.job_id} completed. Downloading output...`);
+                        
+                        downloadFile(`${coordinatorUrl}/api/jobs/${job.job_id}/download_output`, zipPath)
+                            .then(() => {
+                                vscode.window.showInformationMessage(`Extracting output for Job ${job.job_id}...`);
+                                if (!fs.existsSync(extractDir)) fs.mkdirSync(extractDir, { recursive: true });
+                                
+                                // Use Windows native tar to extract
+                                exec(`tar -xf "${zipPath}" -C "${extractDir}"`, (err) => {
+                                    if (!err) {
+                                        vscode.window.showInformationMessage(`Job ${job.job_id} output successfully saved to GPUShare_Outputs/${job.job_id}`);
+                                    } else {
+                                        vscode.window.showWarningMessage(`Failed to extract ${job.job_id}.zip automatically. You can unzip it manually in GPUShare_Outputs.`);
+                                    }
+                                });
+                            })
+                            .catch((err) => {
+                                console.error('Download error:', err);
+                            });
+                    }
+                }
+            }
 
             const balance = await requestApi(`${coordinatorUrl}/api/billing/balance`).catch(() => ({}));
             if (consumerPanel) consumerPanel.webview.postMessage({ type: 'balanceUpdated', data: balance });

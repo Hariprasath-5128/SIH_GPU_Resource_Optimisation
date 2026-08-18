@@ -160,16 +160,22 @@ function setupMessagePassing(panel) {
                             panel.webview.postMessage({ type: 'jobStatusUpdated', data: job });
                         }
                         break;
+                    case 'getJobs':
+                        const jobs = await requestApi(`${coordinatorUrl}/api/jobs`);
+                        panel.webview.postMessage({ type: 'jobsUpdated', data: jobs });
+                        break;
                     case 'getBalance':
                         const balance = await requestApi(`${coordinatorUrl}/api/billing/balance`);
                         panel.webview.postMessage({ type: 'balanceUpdated', data: balance });
                         break;
                     case 'startProvider':
                         if (!providerProcess) {
-                            const agentPath = 'C:\\Projects\\GPU Optimization\\provider_agent\\agent.py';
+                            const workspacePath = vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders[0].uri.fsPath : __dirname;
+                            const agentPath = path.join(workspacePath, 'provider_agent', 'agent.py');
+                            const agentCwd = path.join(workspacePath, 'provider_agent');
                             
                             providerProcess = spawn('python', [agentPath, '--coordinator', coordinatorUrl], {
-                                cwd: 'C:\\Projects\\GPU Optimization\\provider_agent'
+                                cwd: agentCwd
                             });
                             
                             providerProcess.stdout.on('data', (data) => {
@@ -215,7 +221,15 @@ function startPolling() {
             if (providerPanel) providerPanel.webview.postMessage({ type: 'statusUpdate', data: status });
             
             const nodes = await requestApi(`${coordinatorUrl}/api/nodes`).catch(() => []);
+            if (consumerPanel) consumerPanel.webview.postMessage({ type: 'nodesUpdated', data: nodes });
             if (providerPanel) providerPanel.webview.postMessage({ type: 'nodesUpdated', data: nodes });
+
+            const jobs = await requestApi(`${coordinatorUrl}/api/jobs`).catch(() => []);
+            if (providerPanel) providerPanel.webview.postMessage({ type: 'jobsUpdated', data: jobs });
+            if (consumerPanel) consumerPanel.webview.postMessage({ type: 'jobsUpdated', data: jobs });
+
+            const balance = await requestApi(`${coordinatorUrl}/api/billing/balance`).catch(() => ({}));
+            if (consumerPanel) consumerPanel.webview.postMessage({ type: 'balanceUpdated', data: balance });
         } catch (e) {
             // silent fail for polling
         }

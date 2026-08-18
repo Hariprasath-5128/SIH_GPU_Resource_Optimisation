@@ -59,6 +59,7 @@
             gap: 16px;
             align-items: center;
             font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
         }
 
         .card {
@@ -89,9 +90,9 @@
 
         /* Metrics */
         .metric-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem;}
-        .metric-label { width: 120px; color: var(--text-muted); }
-        .metric-bar-wrapper { flex: 1; margin: 0 16px; font-family: monospace; letter-spacing: 2px; color: var(--accent); }
-        .metric-val { width: 100px; text-align: right; }
+        .metric-label { width: 140px; color: var(--text-muted); }
+        .metric-bar-wrapper { flex: 1; margin: 0 16px; font-family: monospace; letter-spacing: 2px; color: var(--accent); font-size: 0.75rem; }
+        .metric-val { width: 110px; text-align: right; }
 
         .btn {
             background-color: var(--accent);
@@ -103,6 +104,7 @@
             cursor: pointer;
             width: 100%;
             transition: all 0.2s ease;
+            font-size: 0.9rem;
         }
         .btn:hover { background-color: var(--accent-sec); }
         .btn.danger { background-color: transparent; border: 1px solid var(--danger); color: var(--danger); }
@@ -131,11 +133,36 @@
         .status-dot {
             display: inline-block;
             width: 10px; height: 10px;
-            background-color: var(--accent-sec);
+            background-color: var(--danger);
             border-radius: 50%;
             margin-right: 8px;
-            box-shadow: 0 0 8px var(--accent-sec);
         }
+        .status-dot.online {
+            background-color: var(--accent-sec);
+            box-shadow: 0 0 8px var(--accent-sec);
+            animation: pulse-dot 2s infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .offline-overlay {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(13,17,23,0.8);
+            z-index: 10;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            text-align: center;
+        }
+        .offline-overlay.show { display: flex; flex-direction: column; gap: 8px; }
     </style>
 </head>
 <body>
@@ -145,38 +172,48 @@
             GPU Share <span class="role-badge">Provider</span>
         </div>
         <div class="header-stats">
-            Earnings: <span style="color: var(--accent)">₹42.50</span>
-            <a href="#" style="color: var(--warning); font-family: 'Inter'; font-size: 0.85rem; margin-left: 10px;">⏸ Pause</a>
+            Earnings: <span style="color: var(--accent)">₹<span id="hdr-earnings">0.00</span></span>
+            &nbsp;|&nbsp;
+            IP: <span style="color: var(--text-muted)" id="hdr-ip">—</span>
         </div>
     </div>
 
     <div class="flex-row">
         <!-- GPU Status -->
-        <div class="card flex-col" style="flex: 2;">
+        <div class="card flex-col" style="flex: 2; position: relative;">
+            <div class="offline-overlay" id="offlineOverlay">
+                <div style="font-size: 1.5rem;">⚡</div>
+                <div>Agent not running</div>
+                <div style="font-size: 0.75rem; color: var(--danger)">Start the provider agent below to see live metrics</div>
+            </div>
+
             <h2 style="display: flex; justify-content: space-between; align-items: center;">
                 <span id="gpu-name">Waiting for GPU...</span>
-                <span style="font-size: 0.8rem; color: var(--accent-sec);"><span class="status-dot" id="onlineDot"></span> ONLINE</span>
+                <span style="font-size: 0.8rem; color: var(--accent-sec); display:flex; align-items:center;">
+                    <span class="status-dot" id="onlineDot"></span>
+                    <span id="statusLabel">OFFLINE</span>
+                </span>
             </h2>
             
             <div class="metric-row">
-                <div class="metric-label">Utilization</div>
+                <div class="metric-label">GPU Util</div>
                 <div class="metric-bar-wrapper" id="bar-util">░░░░░░░░░░░░░░░░░░░░</div>
-                <div class="metric-val" id="val-util">0%</div>
+                <div class="metric-val" id="val-util">—</div>
             </div>
             <div class="metric-row">
                 <div class="metric-label">Temperature</div>
                 <div class="metric-bar-wrapper" id="bar-temp">░░░░░░░░░░░░░░░░░░░░</div>
-                <div class="metric-val" id="val-temp">0°C</div>
+                <div class="metric-val" id="val-temp">—</div>
             </div>
             <div class="metric-row">
                 <div class="metric-label">VRAM</div>
                 <div class="metric-bar-wrapper" id="bar-vram">░░░░░░░░░░░░░░░░░░░░</div>
-                <div class="metric-val" id="val-vram">0/0 GB</div>
+                <div class="metric-val" id="val-vram">—</div>
             </div>
             <div class="metric-row">
                 <div class="metric-label">Power</div>
                 <div class="metric-bar-wrapper" id="bar-power">░░░░░░░░░░░░░░░░░░░░</div>
-                <div class="metric-val" id="val-power">0W</div>
+                <div class="metric-val" id="val-power">—</div>
             </div>
 
             <hr style="border: 0; border-top: 1px solid var(--border); margin: 20px 0;">
@@ -184,7 +221,12 @@
             <div class="metric-row">
                 <div class="metric-label" style="width: 180px;">P(Available 30m)</div>
                 <div class="metric-bar-wrapper" id="bar-avail">░░░░░░░░░░░░░░░░░░░░</div>
-                <div class="metric-val" id="val-avail">0%</div>
+                <div class="metric-val" id="val-avail">—</div>
+            </div>
+            <div class="metric-row">
+                <div class="metric-label" style="width: 180px;">Price/hr</div>
+                <div class="metric-bar-wrapper" id="bar-price" style="color: var(--warning)">—</div>
+                <div class="metric-val" id="val-price">—</div>
             </div>
             
             <div style="margin-top: 24px;">
@@ -200,7 +242,7 @@
             <div class="card">
                 <h2 style="color: var(--accent);">ACTIVE JOB</h2>
                 <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 1.6;" id="job-info">
-                    <div>No active workloads.</div>
+                    <div style="color: var(--text-muted)">No active workloads.</div>
                 </div>
             </div>
 
@@ -208,20 +250,21 @@
             <div class="card">
                 <h2>Trust + Reputation</h2>
                 <div>
-                    <div class="trust-score" id="val-trust">0 / 100</div>
+                    <div class="trust-score" id="val-trust">— / 100</div>
                     <div style="font-family: monospace; color: var(--accent); letter-spacing: 2px; margin-bottom: 12px;" id="bar-trust">░░░░░░░░░░░░░░░░░░░░</div>
                     
-                    <div style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.6;">
-                        Jobs Completed: <span style="color: var(--text-main);">0</span><br>
-                        Uptime: <span style="color: var(--text-main);">100%</span><br>
-                        Reputation: <span style="color: var(--accent-sec);">New</span>
+                    <div style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.8;">
+                        Jobs Completed: <span style="color: var(--text-main);" id="stat-jobs">—</span><br>
+                        GPU Model: <span style="color: var(--text-main);" id="stat-gpu">—</span><br>
+                        VRAM Total: <span style="color: var(--text-main);" id="stat-vram">—</span><br>
+                        Node ID: <span style="color: var(--text-muted); font-size: 0.8rem;" id="stat-nodeid">—</span>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- History -->
+    <!-- Earnings History -->
     <div class="card">
         <h2>Earnings History</h2>
         <div style="margin-bottom: 16px; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem;">
@@ -248,12 +291,16 @@
         const agentBtn = document.getElementById('agentBtn');
         const terminalLog = document.getElementById('terminalLog');
         const onlineDot = document.getElementById('onlineDot');
+        const statusLabel = document.getElementById('statusLabel');
+        const offlineOverlay = document.getElementById('offlineOverlay');
         
         let agentRunning = false;
+        let currentNodeId = null;
 
         function appendLog(msg) {
             const time = new Date().toLocaleTimeString([], {hour12: false});
-            terminalLog.innerHTML += `<div><span style="color:var(--text-muted)">[${time}]</span> ${msg}</div>`;
+            const clean = msg.replace(/\n/g, '<br>');
+            terminalLog.innerHTML += `<div><span style="color:var(--text-muted)">[${time}]</span> ${clean}</div>`;
             terminalLog.scrollTop = terminalLog.scrollHeight;
         }
 
@@ -262,29 +309,86 @@
                 agentRunning = true;
                 agentBtn.innerHTML = '⏹ STOP AGENT';
                 agentBtn.classList.add('danger');
-                onlineDot.style.backgroundColor = 'var(--accent-sec)';
-                onlineDot.style.boxShadow = '0 0 8px var(--accent-sec)';
-                
                 vscode.postMessage({ type: 'startProvider' });
                 appendLog('Starting provider agent...');
             } else {
                 agentRunning = false;
                 agentBtn.innerHTML = '▶ START PROVIDER AGENT';
                 agentBtn.classList.remove('danger');
-                onlineDot.style.backgroundColor = 'var(--danger)';
-                onlineDot.style.boxShadow = '0 0 8px var(--danger)';
-                
+                setOffline();
                 vscode.postMessage({ type: 'stopProvider' });
                 appendLog('Stopping agent...');
             }
         });
 
-        function makeBar(percent) {
-            const p = Math.max(0, Math.min(100, percent));
-            const filled = Math.round(p / 5);
+        function makeBar(percent, maxVal) {
+            const p = maxVal ? (percent / maxVal * 100) : percent;
+            const clamped = Math.max(0, Math.min(100, p));
+            const filled = Math.round(clamped / 5);
             let bar = '';
-            for(let i=0; i<20; i++) bar += i < filled ? '█' : '░';
+            for (let i = 0; i < 20; i++) bar += i < filled ? '█' : '░';
             return bar;
+        }
+
+        function setOffline() {
+            onlineDot.className = 'status-dot';
+            statusLabel.innerText = 'OFFLINE';
+            offlineOverlay.className = 'offline-overlay show';
+        }
+
+        function setOnline() {
+            onlineDot.className = 'status-dot online';
+            statusLabel.innerText = 'ONLINE';
+            offlineOverlay.className = 'offline-overlay';
+        }
+
+        function updateMetrics(node) {
+            const m = node.latest_metrics || {};
+            setOnline();
+
+            document.getElementById('gpu-name').innerText = node.gpu_model || 'Unknown GPU';
+            document.getElementById('hdr-ip').innerText = node.ip_address || '—';
+            currentNodeId = node.node_id;
+
+            const util = m.gpu_utilization ?? 0;
+            document.getElementById('bar-util').innerText = makeBar(util, 100);
+            document.getElementById('val-util').innerText = util.toFixed(1) + '%';
+
+            const temp = m.temperature ?? 0;
+            const tempPct = (temp / 105) * 100; // 105°C = thermal limit
+            document.getElementById('bar-temp').innerText = makeBar(tempPct, 100);
+            document.getElementById('val-temp').innerText = temp.toFixed(0) + '°C';
+            document.getElementById('bar-temp').style.color = temp > 85 ? 'var(--danger)' : temp > 70 ? 'var(--warning)' : 'var(--accent)';
+
+            const vramTotal = node.vram_gb || 0;
+            const vramUsed = vramTotal - (m.available_vram_gb ?? vramTotal);
+            const vramPct = vramTotal > 0 ? (vramUsed / vramTotal * 100) : 0;
+            document.getElementById('bar-vram').innerText = makeBar(vramPct, 100);
+            document.getElementById('val-vram').innerText = `${vramUsed.toFixed(1)}/${vramTotal.toFixed(1)} GB`;
+
+            const power = m.power_watts ?? 0;
+            // Estimate power limit from typical GPU specs if not available — show relative bar
+            document.getElementById('bar-power').innerText = makeBar(Math.min(power, 200), 200);
+            document.getElementById('val-power').innerText = power.toFixed(0) + 'W';
+
+            // Availability: inverse of GPU util
+            const availPct = Math.max(10, 100 - util);
+            document.getElementById('bar-avail').innerText = makeBar(availPct, 100);
+            document.getElementById('val-avail').innerText = availPct.toFixed(0) + '%';
+
+            // Price
+            const price = node.price_per_hour ?? 0;
+            document.getElementById('bar-price').innerText = '';
+            document.getElementById('val-price').innerText = `₹${price.toFixed(1)}/hr`;
+
+            // Trust / stats
+            const trust = node.trust_score ?? 0;
+            document.getElementById('bar-trust').innerText = makeBar(trust, 100);
+            document.getElementById('val-trust').innerText = `${trust.toFixed(0)} / 100`;
+            document.getElementById('stat-jobs').innerText = node.jobs_completed ?? 0;
+            document.getElementById('stat-gpu').innerText = node.gpu_model || '—';
+            document.getElementById('stat-vram').innerText = `${(node.vram_gb || 0).toFixed(1)} GB`;
+            document.getElementById('stat-nodeid').innerText = node.node_id || '—';
         }
 
         window.addEventListener('message', event => {
@@ -292,41 +396,75 @@
             switch (message.type) {
                 case 'providerLog':
                     appendLog(message.data);
-                    if (message.data.includes("Node ID:")) {
+                    if (message.data.includes('Registered') || message.data.includes('Node ID:')) {
                         agentRunning = true;
                         agentBtn.innerHTML = '⏹ STOP AGENT';
                         agentBtn.classList.add('danger');
                     }
+                    if (message.data.includes('Shutting down') || message.data.includes('agent stopped')) {
+                        setOffline();
+                    }
                     break;
+
                 case 'nodesUpdated':
                     if (message.data && message.data.length > 0) {
-                        // Just show the first node as our provider data for now
-                        const node = message.data[0];
-                        const m = node.latest_metrics;
-                        
-                        document.getElementById('gpu-name').innerText = node.gpu_model;
-                        
-                        const util = m.gpu_utilization;
-                        document.getElementById('bar-util').innerText = makeBar(util);
-                        document.getElementById('val-util').innerText = Math.round(util) + '%';
-                        
-                        const temp = m.temperature;
-                        document.getElementById('bar-temp').innerText = makeBar(temp / 100 * 100);
-                        document.getElementById('val-temp').innerText = Math.round(temp) + '°C';
-                        
-                        const vramUsed = node.vram_gb - m.available_vram_gb;
-                        document.getElementById('bar-vram').innerText = makeBar(vramUsed / node.vram_gb * 100);
-                        document.getElementById('val-vram').innerText = `${vramUsed.toFixed(1)}/${node.vram_gb.toFixed(1)} GB`;
-                        
-                        document.getElementById('bar-avail').innerText = makeBar(95);
-                        document.getElementById('val-avail').innerText = '95%';
-                        
-                        document.getElementById('bar-trust').innerText = makeBar(node.trust_score);
-                        document.getElementById('val-trust').innerText = `${node.trust_score} / 100`;
+                        // Prefer the node this session registered (by IP match) or the newest online node
+                        const online = message.data.filter(n => n.status === 'online');
+                        // Pick the one whose node_id matches the one we started, or just the latest online
+                        let node = currentNodeId
+                            ? online.find(n => n.node_id === currentNodeId) || online[online.length - 1]
+                            : online[online.length - 1];
+
+                        if (node) {
+                            updateMetrics(node);
+                            document.getElementById('hdr-earnings').innerText =
+                                ((node.jobs_completed || 0) * (node.price_per_hour || 0) * 0.5).toFixed(2);
+                        } else {
+                            setOffline();
+                        }
+                    } else {
+                        setOffline();
+                    }
+                    break;
+
+                case 'jobsUpdated':
+                    if (message.data && message.data.length > 0) {
+                        const activeJob = message.data.find(j => j.status === 'EXECUTING' && j.node_id === currentNodeId);
+                        const jobInfo = document.getElementById('job-info');
+                        if (activeJob) {
+                            jobInfo.innerHTML = `
+                                <div style="color: var(--accent-sec)">⚡ EXECUTING</div>
+                                <div style="margin-top: 8px;">Job: <span style="color:var(--text-main)">${activeJob.job_id}</span></div>
+                                <div>Workload: <span style="color:var(--text-main)">${activeJob.workload_type || '—'}</span></div>
+                                <div>Model: <span style="color:var(--text-main)">${activeJob.model_name || '—'}</span></div>
+                                <div>Budget: <span style="color:var(--warning)">₹${(activeJob.max_budget||0).toFixed(2)}</span></div>
+                            `;
+                        } else {
+                            jobInfo.innerHTML = '<div style="color: var(--text-muted)">No active workloads.</div>';
+                        }
+
+                        // Earnings history
+                        const completed = message.data.filter(j => j.status === 'COMPLETED' && j.node_id === currentNodeId);
+                        const tbody = document.getElementById('history-tbody');
+                        if (completed.length > 0) {
+                            tbody.innerHTML = completed.map(j => `
+                                <tr>
+                                    <td style="font-family:monospace;font-size:0.8rem">${j.job_id}</td>
+                                    <td>${j.compute_seconds ? (j.compute_seconds/60).toFixed(1)+'m' : '—'}</td>
+                                    <td style="color:var(--accent-sec)">₹${(j.actual_cost||0).toFixed(2)}</td>
+                                    <td style="color:var(--text-muted)">Completed</td>
+                                </tr>
+                            `).join('');
+                        } else {
+                            tbody.innerHTML = '<tr><td colspan="4" style="color: var(--text-muted); text-align: center;">No completed jobs yet.</td></tr>';
+                        }
                     }
                     break;
             }
         });
+
+        // Ask for initial data on load
+        vscode.postMessage({ type: 'getNodes' });
     </script>
 </body>
 </html>

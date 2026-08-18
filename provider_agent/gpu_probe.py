@@ -1,19 +1,37 @@
-import pynvml
+try:
+    import nvidia_ml_py as pynvml
+except ImportError:
+    import pynvml
 import psutil
 import time
 from datetime import datetime
 
 GPU_BENCHMARK_TABLE = {
+    # RTX 50-series (Blackwell)
+    'RTX 5090': 320.0,
+    'RTX 5080': 260.0,
+    'RTX 5070 Ti': 210.0,
+    'RTX 5070': 180.0,
+    'RTX 5060 Ti': 150.0,
+    'RTX 5060': 130.0,
+    # RTX 40-series (Ada Lovelace)
     'RTX 4090': 200.0,
     'RTX 4080': 150.0,
+    'RTX 4070 Ti': 130.0,
     'RTX 4070': 100.0,
+    'RTX 4060 Ti': 85.0,
+    'RTX 4060': 75.0,
+    # RTX 30-series (Ampere)
     'RTX 3090': 130.0,
     'RTX 3080': 90.0,
     'RTX 3070': 70.0,
+    'RTX 3060 Ti': 60.0,
+    'RTX 3060': 55.0,
+    # Data center
     'T4': 50.0,
     'V100': 120.0,
     'A100': 300.0,
-    'A10g': 140.0
+    'A10G': 140.0,
 }
 
 class GPUProbe:

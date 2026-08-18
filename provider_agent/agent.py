@@ -1,4 +1,5 @@
 import sys
+import traceback
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
 
@@ -9,7 +10,7 @@ import threading
 import requests
 import os
 from gpu_probe import GPUProbe
-from worker import YOLOWorker
+from worker import YOLOWorker, _verify_cuda_or_raise
 
 class ProviderAgent:
     def __init__(self, coordinator_url, price, node_id, provider_id):
@@ -24,6 +25,12 @@ class ProviderAgent:
         self.earnings = 0.0
         
     def startup(self):
+        # ── GPU pre-flight check ──────────────────────────────────────────
+        # This will raise RuntimeError with a clear message if CUDA isn't available,
+        # which will propagate to __main__ and prevent registration entirely.
+        print("[Agent] Running GPU pre-flight check...")
+        _verify_cuda_or_raise()
+
         metrics = self.probe.get_metrics()
         clean_model = self.probe.get_gpu_model_clean()
         score = self.probe.get_benchmark_score()
@@ -136,22 +143,33 @@ class ProviderAgent:
             checkpoint_dir = job_data.get('checkpoint_dir', f"./checkpoints/job_{job_id}")
             os.makedirs(checkpoint_dir, exist_ok=True)
             job_config = {
-                "model": job_data.get('model_name', 'yolov8n.pt'),
-                "epochs": job_data.get('epochs', 10),
-                "data": job_data.get('data', 'coco8.yaml'),
-                "resume_epoch": job_data.get('resume_epoch', 0),
+                "model":             job_data.get('model_name', 'yolov8n.pt'),
+                "epochs":            job_data.get('epochs', 10),
+                # 'dataset' is the key worker.py reads (was wrongly 'data' before)
+                "dataset":           job_data.get('dataset', None),
+                "resume_epoch":      job_data.get('resume_epoch', 0),
                 "resume_checkpoint": job_data.get('resume_checkpoint'),
             }
-            worker = YOLOWorker(
-                job_config=job_config,
-                checkpoint_dir=checkpoint_dir,
-                coordinator_url=self.coordinator_url,
-                job_id=job_id
-            )
+            try:
+                worker = YOLOWorker(
+                    job_config=job_config,
+                    checkpoint_dir=checkpoint_dir,
+                    coordinator_url=self.coordinator_url,
+                    job_id=job_id
+                )
+            except RuntimeError as e:
+                # GPU not available — refuse job cleanly
+                print(f"[Agent] Job {job_id} REFUSED — GPU check failed:\n{e}")
+                try:
+                    requests.post(f"{self.coordinator_url}/api/jobs/{job_id}/interrupt", timeout=5)
+                except Exception:
+                    pass
+                self.current_job_id = None
+                return
 
             try:
                 result = worker.run()
-                print(f"[Agent] Job {job_id} completed. mAP50={result.get('final_mAP50', 'N/A')}")
+                print(f"[Agent] Job {job_id} completed. Output: {result.get('output_path', 'N/A')}")
                 try:
                     requests.post(
                         f"{self.coordinator_url}/api/jobs/{job_id}/complete",
@@ -161,7 +179,7 @@ class ProviderAgent:
                 except Exception:
                     pass
             except Exception as e:
-                print(f"[Agent] Job {job_id} failed: {e}")
+                print(f"[Agent] Job {job_id} FAILED:\n{traceback.format_exc()}")
                 try:
                     requests.post(f"{self.coordinator_url}/api/jobs/{job_id}/interrupt", timeout=5)
                 except Exception:

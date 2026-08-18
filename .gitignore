@@ -44,6 +44,8 @@ coordinator/*.db
 # ─── YOLO / ML Artifacts ───────────────────────────────────────────────────
 checkpoints/
 runs/
+provider_agent/runs/
+provider_agent/checkpoints/
 datasets/
 *.pt
 *.onnx

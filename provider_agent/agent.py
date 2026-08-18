@@ -200,7 +200,7 @@ class ProviderAgent:
             
             print("\n============================")
             print("GPUShare Provider Agent")
-            print(f"GPU: {clean_gpu} | Temp: {metrics['temperature']}°C")
+            print(f"GPU: {clean_gpu} | Temp: {metrics['temperature']} C")
             print(f"Util: {metrics['gpu_utilization']}% | VRAM: {metrics['vram_used_gb']:.1f}/{metrics['vram_gb']:.1f} GB")
             print(f"Status: {status}")
             print(f"Earnings: Rs.{self.earnings:.2f}")

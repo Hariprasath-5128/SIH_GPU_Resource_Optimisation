@@ -37,6 +37,7 @@ htmlcov/
 
 # ─── SQLite Databases (local state — do NOT commit) ────────────────────────
 *.db
+coordinator/*.db
 *.sqlite
 *.sqlite3
 

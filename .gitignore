@@ -54,7 +54,6 @@ ultralytics_runs/
 
 # ─── VS Code Extension ─────────────────────────────────────────────────────
 extension/node_modules/
-extension/*.vsix
 extension/.vscode/
 
 # ─── OS & Editor ───────────────────────────────────────────────────────────

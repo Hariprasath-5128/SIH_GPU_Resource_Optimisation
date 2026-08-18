@@ -1,0 +1,81 @@
+# GPUShare — Python / Node / VS Code .gitignore
+
+# ─── Python ────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pycache
+.Python
+
+# Virtual environments
+.venv_provider/
+.venv_coordinator/
+venv/
+env/
+.venv/
+ENV/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+*.whl
+
+# pytest / testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Type checkers / linters
+.mypy_cache/
+.dmypy.json
+.pyre/
+.pytype/
+
+# ─── SQLite Databases (local state — do NOT commit) ────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+
+# ─── YOLO / ML Artifacts ───────────────────────────────────────────────────
+checkpoints/
+runs/
+datasets/
+*.pt
+*.onnx
+*.engine
+*.pb
+*.tflite
+ultralytics_runs/
+
+# ─── VS Code Extension ─────────────────────────────────────────────────────
+extension/node_modules/
+extension/*.vsix
+extension/.vscode/
+
+# ─── OS & Editor ───────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*~
+
+# ─── Logs ──────────────────────────────────────────────────────────────────
+*.log
+logs/
+npm-debug.log*
+
+# ─── Secrets & Local Config ────────────────────────────────────────────────
+.env
+.env.local
+*.env.*
+secrets.json
+
+# ─── Temp / scratch files ──────────────────────────────────────────────────
+scratch_*.py
+tmp/
+temp/

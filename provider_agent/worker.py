@@ -151,11 +151,16 @@ class YOLOWorker:
             else "unknown"
         )
         
-        # Zip the output directory
+        # Zip the output directory — write zip OUTSIDE the folder being zipped
         import shutil
-        zip_path = os.path.join(self.checkpoint_dir, f"{self.job_id}_output")
-        shutil.make_archive(zip_path, 'zip', self.checkpoint_dir)
-        zip_file = f"{zip_path}.zip"
+        import tempfile
+        zip_dir = os.path.join(tempfile.gettempdir(), "gpushare_outputs")
+        os.makedirs(zip_dir, exist_ok=True)
+        zip_base = os.path.join(zip_dir, f"{self.job_id}_output")
+        # root_dir=self.checkpoint_dir means zip contains files directly (no empty wrapper folder)
+        zip_path = shutil.make_archive(zip_base, 'zip', root_dir=self.checkpoint_dir)
+        zip_file = zip_path
+        print(f"[YOLOWorker] Output zip created: {zip_file} ({os.path.getsize(zip_file):,} bytes)")
 
         return {
             "output_path": final_model_path,

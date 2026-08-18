@@ -1,0 +1,13 @@
+{
+    "files.exclude": {
+        "GPUShare_Outputs": true,
+        "**/__pycache__": true
+    },
+    "search.exclude": {
+        "GPUShare_Outputs": true,
+        "**/__pycache__": true
+    },
+    "files.watcherExclude": {
+        "**/GPUShare_Outputs/**": true
+    }
+}

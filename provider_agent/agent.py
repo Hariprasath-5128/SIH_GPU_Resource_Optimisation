@@ -1,9 +1,12 @@
+import sys
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
+
 import argparse
 import time
 import uuid
 import threading
 import requests
-import sys
 import os
 from gpu_probe import GPUProbe
 from worker import YOLOWorker
@@ -32,7 +35,7 @@ class ProviderAgent:
         print(f" Provider ID: {self.provider_id}")
         print(f" GPU:         {metrics['gpu_model']} (Score: {score})")
         print(f" VRAM:        {metrics['vram_gb']:.1f} GB total")
-        print(f" Price:       ₹{self.price}/hr")
+        print(f" Price:       Rs.{self.price}/hr")
         print("="*40)
 
     def register(self):
@@ -182,14 +185,14 @@ class ProviderAgent:
             print(f"GPU: {clean_gpu} | Temp: {metrics['temperature']}°C")
             print(f"Util: {metrics['gpu_utilization']}% | VRAM: {metrics['vram_used_gb']:.1f}/{metrics['vram_gb']:.1f} GB")
             print(f"Status: {status}")
-            print(f"Earnings: ₹{self.earnings:.2f}")
+            print(f"Earnings: Rs.{self.earnings:.2f}")
             print("============================\n")
 
     def stop(self):
         self.running = False
         self.unregister()
         self.probe.close()
-        print(f"[Agent] Shutting down. Total session earnings: ₹{self.earnings:.2f}")
+        print(f"[Agent] Shutting down. Total session earnings: Rs.{self.earnings:.2f}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

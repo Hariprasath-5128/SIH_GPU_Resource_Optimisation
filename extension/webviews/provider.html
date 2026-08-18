@@ -154,37 +154,37 @@
         <!-- GPU Status -->
         <div class="card flex-col" style="flex: 2;">
             <h2 style="display: flex; justify-content: space-between; align-items: center;">
-                <span>RTX 4070 Ti</span>
+                <span id="gpu-name">Waiting for GPU...</span>
                 <span style="font-size: 0.8rem; color: var(--accent-sec);"><span class="status-dot" id="onlineDot"></span> ONLINE</span>
             </h2>
             
             <div class="metric-row">
                 <div class="metric-label">Utilization</div>
-                <div class="metric-bar-wrapper" id="bar-util">████████████░░░░░░░░</div>
-                <div class="metric-val">62%</div>
+                <div class="metric-bar-wrapper" id="bar-util">░░░░░░░░░░░░░░░░░░░░</div>
+                <div class="metric-val" id="val-util">0%</div>
             </div>
             <div class="metric-row">
                 <div class="metric-label">Temperature</div>
-                <div class="metric-bar-wrapper" id="bar-temp">████████░░░░░░░░░░░░</div>
-                <div class="metric-val">62°C</div>
+                <div class="metric-bar-wrapper" id="bar-temp">░░░░░░░░░░░░░░░░░░░░</div>
+                <div class="metric-val" id="val-temp">0°C</div>
             </div>
             <div class="metric-row">
                 <div class="metric-label">VRAM</div>
-                <div class="metric-bar-wrapper" id="bar-vram">████████████████░░░░</div>
-                <div class="metric-val">9.1/12 GB</div>
+                <div class="metric-bar-wrapper" id="bar-vram">░░░░░░░░░░░░░░░░░░░░</div>
+                <div class="metric-val" id="val-vram">0/0 GB</div>
             </div>
             <div class="metric-row">
                 <div class="metric-label">Power</div>
-                <div class="metric-bar-wrapper" id="bar-power">████████████░░░░░░░░</div>
-                <div class="metric-val">185W/220W</div>
+                <div class="metric-bar-wrapper" id="bar-power">░░░░░░░░░░░░░░░░░░░░</div>
+                <div class="metric-val" id="val-power">0W</div>
             </div>
 
             <hr style="border: 0; border-top: 1px solid var(--border); margin: 20px 0;">
             
             <div class="metric-row">
                 <div class="metric-label" style="width: 180px;">P(Available 30m)</div>
-                <div class="metric-bar-wrapper">██████████████████░░</div>
-                <div class="metric-val">96.2%</div>
+                <div class="metric-bar-wrapper" id="bar-avail">░░░░░░░░░░░░░░░░░░░░</div>
+                <div class="metric-val" id="val-avail">0%</div>
             </div>
             
             <div style="margin-top: 24px;">
@@ -199,18 +199,8 @@
             <!-- Current Job -->
             <div class="card">
                 <h2 style="color: var(--accent);">ACTIVE JOB</h2>
-                <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 1.6;">
-                    <div>Job: YOLO Training #abc123</div>
-                    <div>Consumer: Hari's Laptop</div>
-                    <div style="margin: 8px 0;">
-                        Progress: <span style="color: var(--accent)">████████████░░░░</span> 78%
-                    </div>
-                    <div style="color: var(--text-muted);">
-                        Epoch: 4/5 | ETA: 3m 42s
-                    </div>
-                    <div style="margin-top: 8px; color: var(--accent-sec);">
-                        Earning: ₹2.10 so far
-                    </div>
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 1.6;" id="job-info">
+                    <div>No active workloads.</div>
                 </div>
             </div>
 
@@ -218,13 +208,13 @@
             <div class="card">
                 <h2>Trust + Reputation</h2>
                 <div>
-                    <div class="trust-score">94 / 100</div>
-                    <div style="font-family: monospace; color: var(--accent); letter-spacing: 2px; margin-bottom: 12px;">██████████████████░░</div>
+                    <div class="trust-score" id="val-trust">0 / 100</div>
+                    <div style="font-family: monospace; color: var(--accent); letter-spacing: 2px; margin-bottom: 12px;" id="bar-trust">░░░░░░░░░░░░░░░░░░░░</div>
                     
                     <div style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.6;">
-                        Jobs Completed: <span style="color: var(--text-main);">17</span><br>
-                        Uptime: <span style="color: var(--text-main);">96%</span><br>
-                        Reputation: <span style="color: var(--accent-sec);">Excellent</span>
+                        Jobs Completed: <span style="color: var(--text-main);">0</span><br>
+                        Uptime: <span style="color: var(--text-main);">100%</span><br>
+                        Reputation: <span style="color: var(--accent-sec);">New</span>
                     </div>
                 </div>
             </div>
@@ -235,7 +225,7 @@
     <div class="card">
         <h2>Earnings History</h2>
         <div style="margin-bottom: 16px; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem;">
-            Session Earnings: <span style="color: var(--accent)">₹42.50</span>
+            Session Earnings: <span style="color: var(--accent)" id="val-earnings">₹0.00</span>
         </div>
         <table class="table">
             <thead>
@@ -246,19 +236,8 @@
                     <th>Status</th>
                 </tr>
             </thead>
-            <tbody>
-                <tr>
-                    <td style="font-family: monospace;">#xyz789</td>
-                    <td>1h 45m</td>
-                    <td style="color: var(--accent-sec)">₹26.25</td>
-                    <td style="color: var(--text-muted)">Completed</td>
-                </tr>
-                <tr>
-                    <td style="font-family: monospace;">#def456</td>
-                    <td>45m</td>
-                    <td style="color: var(--accent-sec)">₹11.25</td>
-                    <td style="color: var(--text-muted)">Completed</td>
-                </tr>
+            <tbody id="history-tbody">
+                <tr><td colspan="4" style="color: var(--text-muted); text-align: center;">No completed jobs yet.</td></tr>
             </tbody>
         </table>
     </div>
@@ -288,11 +267,6 @@
                 
                 vscode.postMessage({ type: 'startProvider' });
                 appendLog('Starting provider agent...');
-                
-                // Demo log simulation if backend isn't there
-                setTimeout(() => appendLog('Connecting to coordinator...'), 500);
-                setTimeout(() => appendLog('GPU Detected: NVIDIA RTX 4070 Ti (12GB)'), 1000);
-                setTimeout(() => appendLog('Node registered. Listening for workloads...'), 1500);
             } else {
                 agentRunning = false;
                 agentBtn.innerHTML = '▶ START PROVIDER AGENT';
@@ -305,25 +279,54 @@
             }
         });
 
+        function makeBar(percent) {
+            const p = Math.max(0, Math.min(100, percent));
+            const filled = Math.round(p / 5);
+            let bar = '';
+            for(let i=0; i<20; i++) bar += i < filled ? '█' : '░';
+            return bar;
+        }
+
         window.addEventListener('message', event => {
             const message = event.data;
             switch (message.type) {
                 case 'providerLog':
                     appendLog(message.data);
+                    if (message.data.includes("Node ID:")) {
+                        agentRunning = true;
+                        agentBtn.innerHTML = '⏹ STOP AGENT';
+                        agentBtn.classList.add('danger');
+                    }
+                    break;
+                case 'nodesUpdated':
+                    if (message.data && message.data.length > 0) {
+                        // Just show the first node as our provider data for now
+                        const node = message.data[0];
+                        const m = node.latest_metrics;
+                        
+                        document.getElementById('gpu-name').innerText = node.gpu_model;
+                        
+                        const util = m.gpu_utilization;
+                        document.getElementById('bar-util').innerText = makeBar(util);
+                        document.getElementById('val-util').innerText = Math.round(util) + '%';
+                        
+                        const temp = m.temperature;
+                        document.getElementById('bar-temp').innerText = makeBar(temp / 100 * 100);
+                        document.getElementById('val-temp').innerText = Math.round(temp) + '°C';
+                        
+                        const vramUsed = node.vram_gb - m.available_vram_gb;
+                        document.getElementById('bar-vram').innerText = makeBar(vramUsed / node.vram_gb * 100);
+                        document.getElementById('val-vram').innerText = `${vramUsed.toFixed(1)}/${node.vram_gb.toFixed(1)} GB`;
+                        
+                        document.getElementById('bar-avail').innerText = makeBar(95);
+                        document.getElementById('val-avail').innerText = '95%';
+                        
+                        document.getElementById('bar-trust').innerText = makeBar(node.trust_score);
+                        document.getElementById('val-trust').innerText = `${node.trust_score} / 100`;
+                    }
                     break;
             }
         });
-        
-        // Bar animation simulation
-        setInterval(() => {
-            if(!agentRunning) return;
-            const util = Math.floor(60 + Math.random() * 10);
-            const filled = Math.floor(util / 5);
-            let bar = '';
-            for(let i=0; i<20; i++) bar += i < filled ? '█' : '░';
-            document.getElementById('bar-util').innerText = bar;
-            document.getElementById('bar-util').nextElementSibling.innerText = util + '%';
-        }, 2000);
     </script>
 </body>
 </html>

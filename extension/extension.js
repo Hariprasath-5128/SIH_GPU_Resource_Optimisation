@@ -166,8 +166,10 @@ function setupMessagePassing(panel) {
                         break;
                     case 'startProvider':
                         if (!providerProcess) {
-                            providerProcess = spawn('python', ['provider_agent/agent.py', '--coordinator', coordinatorUrl], {
-                                cwd: vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders[0].uri.fsPath : undefined
+                            const agentPath = 'C:\\Projects\\GPU Optimization\\provider_agent\\agent.py';
+                            
+                            providerProcess = spawn('python', [agentPath, '--coordinator', coordinatorUrl], {
+                                cwd: 'C:\\Projects\\GPU Optimization\\provider_agent'
                             });
                             
                             providerProcess.stdout.on('data', (data) => {
@@ -211,6 +213,9 @@ function startPolling() {
             const status = await requestApi(`${coordinatorUrl}/api/status`).catch(() => ({ status: 'offline' }));
             if (consumerPanel) consumerPanel.webview.postMessage({ type: 'statusUpdate', data: status });
             if (providerPanel) providerPanel.webview.postMessage({ type: 'statusUpdate', data: status });
+            
+            const nodes = await requestApi(`${coordinatorUrl}/api/nodes`).catch(() => []);
+            if (providerPanel) providerPanel.webview.postMessage({ type: 'nodesUpdated', data: nodes });
         } catch (e) {
             // silent fail for polling
         }

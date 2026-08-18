@@ -71,7 +71,6 @@
             overflow: hidden;
         }
         
-        /* Subtle noise texture */
         .card::before {
             content: '';
             position: absolute;
@@ -130,6 +129,7 @@
             transition: all 0.2s ease;
         }
         button:hover { background-color: var(--accent-sec); transform: translateY(-1px); }
+        button:disabled { background-color: var(--text-muted); cursor: not-allowed; }
         button.danger { background-color: transparent; border: 1px solid var(--danger); color: var(--danger); }
         button.danger:hover { background-color: rgba(248, 81, 73, 0.1); }
 
@@ -151,23 +151,24 @@
         .table th, .table td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
         .table th { color: var(--text-muted); font-weight: 500; }
 
-        .alert {
-            display: none;
-            background: rgba(248, 81, 73, 0.1);
-            border: 1px solid var(--danger);
-            color: var(--danger);
-            padding: 12px 16px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            font-weight: 500;
+        .status-dot {
+            display: inline-block;
+            width: 10px; height: 10px;
+            background-color: var(--danger);
+            border-radius: 50%;
+            margin-right: 8px;
         }
-        .alert.active { display: block; animation: pulse 2s infinite; }
+        .status-dot.online {
+            background-color: var(--accent-sec);
+            box-shadow: 0 0 8px var(--accent-sec);
+            animation: pulse-dot 2s infinite;
+        }
 
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(248,81,73, 0.4); }
-            70% { box-shadow: 0 0 0 10px rgba(248,81,73, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(248,81,73, 0); }
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
         }
+
     </style>
 </head>
 <body>
@@ -177,47 +178,38 @@
             GPU Share <span class="role-badge">Consumer</span>
         </div>
         <div class="header-stats">
-            Balance: <span style="color: var(--accent)">₹<span id="balance">87.50</span></span>
-            <a href="#" style="color: var(--text-muted); font-family: 'Inter'; font-size: 0.85rem; margin-left: 10px;">Configure</a>
+            Balance: <span style="color: var(--accent)">₹<span id="balance">0.00</span></span>
         </div>
-    </div>
-
-    <div class="alert" id="interruptionAlert">
-        ⚠ Provider disconnected! Restoring from Epoch 3 checkpoint...<br>
-        <span style="color: var(--text-main); font-weight: normal; font-size: 0.85rem; margin-top: 8px; display: inline-block;">[Checkpoint restored ✓] → Searching for new GPU...</span>
     </div>
 
     <div class="flex-row">
         <!-- Provider Network -->
-        <div class="card flex-col">
+        <div class="card flex-col" id="networkSection">
             <h2 style="display: flex; justify-content: space-between;">
                 <span>Available Network</span>
-                <span style="font-size: 0.8rem; color: var(--accent-sec); display: flex; align-items: center; gap: 6px;">
-                    <div style="width:8px;height:8px;border-radius:50%;background:var(--accent-sec)"></div> RTX 4090 Ready
+                <span style="font-size: 0.8rem; color: var(--accent-sec); display: flex; align-items: center; gap: 6px;" id="networkStatus">
+                    <div class="status-dot"></div> Searching...
                 </span>
             </h2>
             
             <div class="flex-row" style="margin-bottom: 20px; align-items: center;">
                 <div class="score-box" style="width: 120px;">
-                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px;">GPUMatch</div>
-                    <div class="score-val" id="gpuScore">92</div>
-                    <div style="font-size: 0.75rem; color: var(--accent-sec);">Excellent</div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px;">Top GPU</div>
+                    <div class="score-val" id="topGpuScore">—</div>
                 </div>
-                <div class="flex-col">
-                    <div class="metric-label">Availability (30m): 96.2%</div>
-                    <div class="metric-label">Network: 1.2 Gbps</div>
-                    <div class="metric-label">Cost: ₹15/hr (Save 82% vs Cloud)</div>
+                <div class="flex-col" id="networkDetails">
+                    <div class="metric-label">No active nodes found.</div>
                 </div>
             </div>
 
             <div style="margin-bottom: 12px;">
-                <div class="metric-label">GPU Utilization</div>
-                <div class="metric-bar-bg"><div class="metric-bar-fill" style="width: 12%; background: var(--accent);"></div></div>
+                <div class="metric-label">Node Status</div>
+                <div class="metric-value" style="text-align: left;" id="nodeStatusVal">Waiting for coordinator...</div>
             </div>
             <div>
-                <div class="metric-label">VRAM Usage</div>
-                <div class="metric-bar-bg"><div class="metric-bar-fill" style="width: 25%; background: var(--accent);"></div></div>
-                <div class="metric-value">6.1 / 24 GB</div>
+                <div class="metric-label">Network VRAM Available</div>
+                <div class="metric-bar-bg"><div class="metric-bar-fill" id="vramBar" style="width: 0%; background: var(--accent);"></div></div>
+                <div class="metric-value" id="vramVal">0 / 0 GB</div>
             </div>
         </div>
 
@@ -227,9 +219,7 @@
             <div class="form-group">
                 <label>Workload</label>
                 <select id="workload">
-                    <option>YOLO Training v8n</option>
-                    <option>Stable Diffusion Inference</option>
-                    <option>LLM Fine-tuning (LoRA)</option>
+                    <option value="yolo_train">YOLO Training v8n</option>
                 </select>
             </div>
             <div class="flex-row">
@@ -239,14 +229,14 @@
                 </div>
                 <div class="form-group flex-col">
                     <label>VRAM Req (GB)</label>
-                    <input type="number" value="8" id="vram">
+                    <input type="number" value="4" id="vram">
                 </div>
             </div>
             <div class="form-group">
                 <label>Budget Limit (₹)</label>
                 <input type="number" value="25" id="budget">
             </div>
-            <button id="submitBtn">▶ SUBMIT JOB</button>
+            <button id="submitBtn" disabled>▶ WAITING FOR NETWORK</button>
         </div>
 
         <!-- Job Monitor -->
@@ -254,24 +244,23 @@
             <h2 style="color: var(--accent);">JOB EXECUTING</h2>
             <div class="terminal-box">
                 <div style="margin-bottom: 12px;">
-                    Job #<span id="jobIdDisplay"></span> | Provider: Hari's RTX 4090
+                    Job #<span id="jobIdDisplay"></span> | Node: <span id="jobNodeDisplay"></span>
                 </div>
                 <div style="margin-bottom: 8px;">
-                    Progress: <span style="color: var(--accent)">████████████░░░░ <span id="progressPct">78</span>%</span>
+                    Progress: <span style="color: var(--accent)"><span id="progressVisual"></span> <span id="progressPct">0</span>%</span>
                 </div>
                 <div style="color: var(--text-muted); margin-bottom: 12px;">
-                    Epoch: <span id="epochVal">4</span>/10 | ETA: <span id="etaVal">3m 42s</span>
+                    Epoch: <span id="epochVal">0</span>/<span id="totalEpochVal"></span>
                 </div>
                 
                 <div class="flex-row" style="margin-bottom: 12px; font-size: 0.8rem; border-top: 1px solid var(--border); padding-top: 12px;">
-                    <div class="flex-col">Util: 98%<br>VRAM: 9.1GB</div>
-                    <div class="flex-col">Cost: ₹2.10<br>Save: 97%</div>
+                    <div class="flex-col">Status: <span id="jobStatusVal">EXECUTING</span></div>
+                    <div class="flex-col" id="jobCostVal">Cost: ₹0.00</div>
                 </div>
-                
-                <div style="color: var(--accent-sec);">Checkpoints: 3 saved ✓</div>
             </div>
             <div style="margin-top: 16px;">
-                <button class="danger" id="cancelBtn">⏹ CANCEL JOB</button>
+                <button class="danger" id="cancelBtn" style="display:none;">⏹ CANCEL JOB</button>
+                <button class="btn" id="newJobBtn" style="display:none; background-color: var(--accent);">▶ NEW JOB</button>
             </div>
         </div>
     </div>
@@ -283,27 +272,14 @@
             <thead>
                 <tr>
                     <th>Job ID</th>
-                    <th>Provider</th>
+                    <th>Node</th>
+                    <th>Model</th>
                     <th>Cost</th>
-                    <th>Savings</th>
                     <th>Status</th>
                 </tr>
             </thead>
-            <tbody>
-                <tr>
-                    <td style="font-family: monospace;">#f8a291</td>
-                    <td>Alex's 3080</td>
-                    <td>₹12.50</td>
-                    <td style="color: var(--accent-sec)">₹65 (83%)</td>
-                    <td style="color: var(--text-muted)">Completed</td>
-                </tr>
-                <tr>
-                    <td style="font-family: monospace;">#b39c12</td>
-                    <td>Sam's 4070</td>
-                    <td>₹4.20</td>
-                    <td style="color: var(--accent-sec)">₹22 (84%)</td>
-                    <td style="color: var(--text-muted)">Completed</td>
-                </tr>
+            <tbody id="history-tbody">
+                <tr><td colspan="5" style="color: var(--text-muted); text-align: center;">No completed jobs yet.</td></tr>
             </tbody>
         </table>
     </div>
@@ -313,79 +289,186 @@
         
         const submitBtn = document.getElementById('submitBtn');
         const cancelBtn = document.getElementById('cancelBtn');
+        const newJobBtn = document.getElementById('newJobBtn');
         const submitSection = document.getElementById('submitSection');
         const monitorSection = document.getElementById('monitorSection');
         
-        let simInterval;
+        let activeJobId = null;
+        let isNetworkAvailable = false;
 
         submitBtn.addEventListener('click', () => {
             submitBtn.innerHTML = 'Submitting...';
-            submitBtn.style.opacity = '0.7';
+            submitBtn.disabled = true;
             
-            // Simulate network request
-            setTimeout(() => {
-                const jobId = Math.random().toString(36).substring(2, 8);
-                document.getElementById('jobIdDisplay').innerText = jobId;
-                
-                submitSection.style.display = 'none';
-                monitorSection.classList.add('active');
-                
-                vscode.postMessage({
-                    type: 'submitJob',
-                    data: {
-                        workload: document.getElementById('workload').value,
-                        epochs: document.getElementById('epochs').value,
-                        vram: document.getElementById('vram').value,
-                        budget: document.getElementById('budget').value
-                    }
-                });
-
-                startSimulation();
-            }, 800);
+            vscode.postMessage({
+                type: 'submitJob',
+                data: {
+                    consumer_id: 'consumer_01',
+                    workload_type: document.getElementById('workload').value,
+                    model_name: 'yolov8n.pt',
+                    vram_required_gb: parseFloat(document.getElementById('vram').value),
+                    max_budget: parseFloat(document.getElementById('budget').value),
+                    estimated_minutes: parseInt(document.getElementById('epochs').value) * 2
+                }
+            });
         });
 
         cancelBtn.addEventListener('click', () => {
-            clearInterval(simInterval);
+            // Not fully implemented on backend in demo, but we can reset UI
+            resetJobUI();
+        });
+
+        newJobBtn.addEventListener('click', () => {
+            resetJobUI();
+        });
+
+        function resetJobUI() {
+            activeJobId = null;
             monitorSection.classList.remove('active');
             submitSection.style.display = 'block';
             submitBtn.innerHTML = '▶ SUBMIT JOB';
-            submitBtn.style.opacity = '1';
-        });
+            submitBtn.disabled = !isNetworkAvailable;
+            document.getElementById('progressVisual').innerText = '';
+            document.getElementById('progressPct').innerText = '0';
+            document.getElementById('epochVal').innerText = '0';
+            cancelBtn.style.display = 'none';
+            newJobBtn.style.display = 'none';
+        }
 
-        // Simulating job progress for demo
-        function startSimulation() {
-            let progress = 0;
-            simInterval = setInterval(() => {
-                progress += Math.random() * 5;
-                if(progress > 100) progress = 100;
-                
-                document.getElementById('progressPct').innerText = Math.floor(progress);
-                document.getElementById('epochVal').innerText = Math.floor((progress/100) * document.getElementById('epochs').value);
-                
-                // Simulate interruption around 60%
-                if(progress > 55 && progress < 65 && !document.getElementById('interruptionAlert').classList.contains('active')) {
-                    document.getElementById('interruptionAlert').classList.add('active');
-                    setTimeout(() => {
-                        document.getElementById('interruptionAlert').classList.remove('active');
-                    }, 4000);
-                }
-
-                if(progress >= 100) {
-                    clearInterval(simInterval);
-                    setTimeout(() => cancelBtn.click(), 2000);
-                }
-            }, 1000);
+        function makeProgressVisual(percent) {
+            const p = Math.max(0, Math.min(100, percent));
+            const filled = Math.round(p / 5);
+            let bar = '';
+            for(let i=0; i<20; i++) bar += i < filled ? '█' : '░';
+            return bar;
         }
 
         window.addEventListener('message', event => {
             const message = event.data;
             switch (message.type) {
                 case 'balanceUpdated':
-                    if(message.data.balance) document.getElementById('balance').innerText = message.data.balance.toFixed(2);
+                    if (message.data.consumer_credits !== undefined) {
+                        document.getElementById('balance').innerText = message.data.consumer_credits.toFixed(2);
+                    }
                     break;
-                // Add more handlers as real API comes online
+                case 'nodesUpdated':
+                    const onlineNodes = (message.data || []).filter(n => n.status === 'online');
+                    isNetworkAvailable = onlineNodes.length > 0;
+                    
+                    if (isNetworkAvailable) {
+                        const topNode = onlineNodes[onlineNodes.length - 1]; // Assume last is newest/best for now
+                        document.getElementById('networkStatus').innerHTML = `<div class="status-dot online"></div> ${topNode.gpu_model} Ready`;
+                        document.getElementById('topGpuScore').innerText = topNode.gpu_model.split(' ')[1] || 'GPU'; // Simplified
+                        
+                        document.getElementById('networkDetails').innerHTML = `
+                            <div class="metric-label">Price: ₹${topNode.price_per_hour}/hr</div>
+                            <div class="metric-label">Trust Score: ${topNode.trust_score}/100</div>
+                            <div class="metric-label">Node: ${topNode.node_id.substring(0, 8)}...</div>
+                        `;
+                        
+                        document.getElementById('nodeStatusVal').innerText = `${onlineNodes.length} node(s) online`;
+                        
+                        let totalVram = 0;
+                        let availVram = 0;
+                        onlineNodes.forEach(n => {
+                            totalVram += n.vram_gb;
+                            availVram += (n.latest_metrics && n.latest_metrics.available_vram_gb !== undefined) ? n.latest_metrics.available_vram_gb : n.vram_gb;
+                        });
+                        
+                        const vramPct = (availVram / totalVram) * 100;
+                        document.getElementById('vramBar').style.width = `${vramPct}%`;
+                        document.getElementById('vramVal').innerText = `${availVram.toFixed(1)} / ${totalVram.toFixed(1)} GB`;
+
+                        if (submitBtn.innerHTML.includes('WAITING') || submitBtn.disabled) {
+                            submitBtn.innerHTML = '▶ SUBMIT JOB';
+                            submitBtn.disabled = false;
+                        }
+                    } else {
+                        document.getElementById('networkStatus').innerHTML = `<div class="status-dot"></div> Searching...`;
+                        document.getElementById('topGpuScore').innerText = '—';
+                        document.getElementById('networkDetails').innerHTML = `<div class="metric-label">No active nodes found.</div>`;
+                        document.getElementById('nodeStatusVal').innerText = `Waiting for coordinator...`;
+                        document.getElementById('vramBar').style.width = `0%`;
+                        document.getElementById('vramVal').innerText = `0 / 0 GB`;
+                        
+                        if (!submitBtn.innerHTML.includes('Submitting')) {
+                            submitBtn.innerHTML = '▶ WAITING FOR NETWORK';
+                            submitBtn.disabled = true;
+                        }
+                    }
+                    break;
+
+                case 'jobSubmitted':
+                    if (message.data && message.data.job_id) {
+                        activeJobId = message.data.job_id;
+                        document.getElementById('jobIdDisplay').innerText = activeJobId;
+                        document.getElementById('jobNodeDisplay').innerText = message.data.matched_node || 'Unknown';
+                        
+                        submitSection.style.display = 'none';
+                        monitorSection.classList.add('active');
+                        cancelBtn.style.display = 'inline-block';
+                        newJobBtn.style.display = 'none';
+                        
+                        document.getElementById('progressVisual').innerText = makeProgressVisual(0);
+                        document.getElementById('progressPct').innerText = '0';
+                        document.getElementById('epochVal').innerText = '0';
+                        document.getElementById('totalEpochVal').innerText = document.getElementById('epochs').value;
+                        document.getElementById('jobStatusVal').innerText = 'QUEUED';
+                    } else {
+                        submitBtn.innerHTML = '▶ SUBMIT JOB';
+                        submitBtn.disabled = false;
+                        console.error('Job submission failed:', message.data);
+                    }
+                    break;
+                    
+                case 'jobsUpdated':
+                    if (!message.data) return;
+                    
+                    // Update active job monitor
+                    if (activeJobId) {
+                        const activeJob = message.data.find(j => j.job_id === activeJobId);
+                        if (activeJob) {
+                            document.getElementById('jobStatusVal').innerText = activeJob.status;
+                            
+                            // Mock progress based on status if real progress isn't via websocket yet
+                            if (activeJob.status === 'COMPLETED') {
+                                document.getElementById('progressVisual').innerText = makeProgressVisual(100);
+                                document.getElementById('progressPct').innerText = '100';
+                                document.getElementById('epochVal').innerText = document.getElementById('totalEpochVal').innerText;
+                                document.getElementById('jobCostVal').innerText = `Cost: ₹${(activeJob.actual_cost || 0).toFixed(2)}`;
+                                cancelBtn.style.display = 'none';
+                                newJobBtn.style.display = 'inline-block';
+                            } else if (activeJob.status === 'EXECUTING') {
+                                // If it's executing but we don't have real progress, show a generic executing state
+                                // Normally this would be updated via real-time WebSocket progress events
+                                document.getElementById('progressVisual').innerText = makeProgressVisual(50); 
+                                document.getElementById('progressPct').innerText = '~50';
+                            }
+                        }
+                    }
+                    
+                    // Update history table
+                    const historyJobs = message.data.filter(j => j.status === 'COMPLETED' || j.status === 'INTERRUPTED').reverse();
+                    const tbody = document.getElementById('history-tbody');
+                    if (historyJobs.length > 0) {
+                        tbody.innerHTML = historyJobs.map(j => `
+                            <tr>
+                                <td style="font-family: monospace;">${j.job_id.substring(0, 8)}...</td>
+                                <td>${(j.node_id || '').substring(0, 8)}</td>
+                                <td>${j.model_name || 'yolo'}</td>
+                                <td>₹${(j.actual_cost || 0).toFixed(2)}</td>
+                                <td style="color: ${j.status === 'COMPLETED' ? 'var(--accent-sec)' : 'var(--danger)'}">${j.status}</td>
+                            </tr>
+                        `).join('');
+                    }
+                    break;
             }
         });
+
+        // Ask for initial data on load
+        vscode.postMessage({ type: 'getNodes' });
+        vscode.postMessage({ type: 'getJobs' });
+        vscode.postMessage({ type: 'getBalance' });
     </script>
 </body>
 </html>

@@ -105,8 +105,10 @@ class YOLOWorker:
                 print(f"[Worker] Failed to load checkpoint: {e}")
 
         # 2. Dummy data pushing into the GPU
-        dummy_input = torch.randn(256, 1024).to(self.device)
-        dummy_target = torch.randn(256, 10).to(self.device)
+        batch_size = self.job_config.get('batch_size', 256)
+        print(f"[Worker] Using batch size: {batch_size}")
+        dummy_input = torch.randn(batch_size, 1024).to(self.device)
+        dummy_target = torch.randn(batch_size, 10).to(self.device)
 
         # 3. The main AI training loop
         epoch = start_epoch

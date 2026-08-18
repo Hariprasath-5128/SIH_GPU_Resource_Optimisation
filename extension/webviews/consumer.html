@@ -223,12 +223,16 @@
                 </select>
             </div>
             <div class="flex-row">
-                <div class="form-group flex-col">
+                <div class="form-group flex-col" style="flex: 1;">
                     <label>Epochs</label>
                     <input type="number" value="10" id="epochs">
                 </div>
-                <div class="form-group flex-col">
-                    <label>VRAM Req (GB)</label>
+                <div class="form-group flex-col" style="flex: 1;">
+                    <label>Batch Size</label>
+                    <input type="number" value="256" id="batchSize">
+                </div>
+                <div class="form-group flex-col" style="flex: 1;">
+                    <label>VRAM (GB)</label>
                     <input type="number" value="4" id="vram">
                 </div>
             </div>
@@ -308,7 +312,8 @@
                     model_name: 'yolov8n.pt',
                     vram_required_gb: parseFloat(document.getElementById('vram').value),
                     max_budget: parseFloat(document.getElementById('budget').value),
-                    estimated_minutes: parseInt(document.getElementById('epochs').value) * 2
+                    estimated_minutes: parseInt(document.getElementById('epochs').value) * 2,
+                    batch_size: parseInt(document.getElementById('batchSize').value) || 256
                 }
             });
         });

@@ -58,6 +58,7 @@ class Job(Base):
     model_name = Column(String)
     vram_required_gb = Column(Float)
     max_budget = Column(Float)
+    batch_size = Column(Integer, default=256)
     status = Column(String)
     gpumatch_score = Column(Float, nullable=True)
     expected_cost = Column(Float, nullable=True)

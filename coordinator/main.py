@@ -250,6 +250,7 @@ class JobSubmitReq(BaseModel):
     vram_required_gb: float
     max_budget: float
     estimated_minutes: int
+    batch_size: Optional[int] = 256
     input_hash: Optional[str] = None
 
 @app.post("/api/jobs/submit")
@@ -297,6 +298,7 @@ async def submit_job(req: JobSubmitReq, db: Session = Depends(get_db)):
         model_name=req.model_name,
         vram_required_gb=req.vram_required_gb,
         max_budget=req.max_budget,
+        batch_size=req.batch_size,
         status="QUEUED",
         gpumatch_score=best_score,
         expected_cost=match_details.get("expected_cost"),
@@ -548,6 +550,7 @@ def get_pending_job(node_id: str, db: Session = Depends(get_db)):
             "resume_epoch": latest_chk.epoch if latest_chk else 0,
             "resume_checkpoint": latest_chk.file_path if latest_chk else None,
             "vram_required_gb": job.vram_required_gb,
+            "batch_size": job.batch_size,
         }
     }
 

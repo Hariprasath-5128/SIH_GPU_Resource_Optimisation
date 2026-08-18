@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPUShare Provider</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0d1117;
+            --bg-card: #161b22;
+            --border: #21262d;
+            --accent: #00d9a3;
+            --accent-sec: #7ee787;
+            --danger: #f85149;
+            --warning: #d29922;
+            --text-main: #c9d1d9;
+            --text-muted: #8b949e;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 24px;
+        }
+
+        .header-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .role-badge {
+            background-color: rgba(210, 153, 34, 0.1);
+            color: var(--warning);
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .header-stats {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.02'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        .card > * { position: relative; z-index: 1; }
+
+        h2 { margin-top: 0; font-size: 1.1rem; color: #fff; margin-bottom: 20px; }
+
+        .flex-row { display: flex; gap: 20px; }
+        .flex-col { flex: 1; }
+
+        /* Metrics */
+        .metric-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem;}
+        .metric-label { width: 120px; color: var(--text-muted); }
+        .metric-bar-wrapper { flex: 1; margin: 0 16px; font-family: monospace; letter-spacing: 2px; color: var(--accent); }
+        .metric-val { width: 100px; text-align: right; }
+
+        .btn {
+            background-color: var(--accent);
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.2s ease;
+        }
+        .btn:hover { background-color: var(--accent-sec); }
+        .btn.danger { background-color: transparent; border: 1px solid var(--danger); color: var(--danger); }
+        .btn.danger:hover { background-color: rgba(248, 81, 73, 0.1); }
+
+        .terminal {
+            background: #000;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--text-main);
+            height: 150px;
+            overflow-y: auto;
+            margin-top: 16px;
+            line-height: 1.4;
+        }
+
+        .table { width: 100%; border-collapse: collapse; }
+        .table th, .table td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+        .table th { color: var(--text-muted); font-weight: 500; }
+        
+        .trust-score { font-family: 'JetBrains Mono', monospace; font-size: 1.5rem; color: var(--accent); }
+        
+        .status-dot {
+            display: inline-block;
+            width: 10px; height: 10px;
+            background-color: var(--accent-sec);
+            border-radius: 50%;
+            margin-right: 8px;
+            box-shadow: 0 0 8px var(--accent-sec);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="header-title">
+            GPU Share <span class="role-badge">Provider</span>
+        </div>
+        <div class="header-stats">
+            Earnings: <span style="color: var(--accent)">₹42.50</span>
+            <a href="#" style="color: var(--warning); font-family: 'Inter'; font-size: 0.85rem; margin-left: 10px;">⏸ Pause</a>
+        </div>
+    </div>
+
+    <div class="flex-row">
+        <!-- GPU Status -->
+        <div class="card flex-col" style="flex: 2;">
+            <h2 style="display: flex; justify-content: space-between; align-items: center;">
+                <span>RTX 4070 Ti</span>
+                <span style="font-size: 0.8rem; color: var(--accent-sec);"><span class="status-dot" id="onlineDot"></span> ONLINE</span>
+            </h2>
+            
+            <div class="metric-row">
+                <div class="metric-label">Utilization</div>
+                <div class="metric-bar-wrapper" id="bar-util">████████████░░░░░░░░</div>
+                <div class="metric-val">62%</div>
+            </div>
+            <div class="metric-row">
+                <div class="metric-label">Temperature</div>
+                <div class="metric-bar-wrapper" id="bar-temp">████████░░░░░░░░░░░░</div>
+                <div class="metric-val">62°C</div>
+            </div>
+            <div class="metric-row">
+                <div class="metric-label">VRAM</div>
+                <div class="metric-bar-wrapper" id="bar-vram">████████████████░░░░</div>
+                <div class="metric-val">9.1/12 GB</div>
+            </div>
+            <div class="metric-row">
+                <div class="metric-label">Power</div>
+                <div class="metric-bar-wrapper" id="bar-power">████████████░░░░░░░░</div>
+                <div class="metric-val">185W/220W</div>
+            </div>
+
+            <hr style="border: 0; border-top: 1px solid var(--border); margin: 20px 0;">
+            
+            <div class="metric-row">
+                <div class="metric-label" style="width: 180px;">P(Available 30m)</div>
+                <div class="metric-bar-wrapper">██████████████████░░</div>
+                <div class="metric-val">96.2%</div>
+            </div>
+            
+            <div style="margin-top: 24px;">
+                <button class="btn" id="agentBtn">▶ START PROVIDER AGENT</button>
+                <div class="terminal" id="terminalLog">
+                    > Ready to start GPUShare provider agent...
+                </div>
+            </div>
+        </div>
+
+        <div class="flex-col">
+            <!-- Current Job -->
+            <div class="card">
+                <h2 style="color: var(--accent);">ACTIVE JOB</h2>
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 1.6;">
+                    <div>Job: YOLO Training #abc123</div>
+                    <div>Consumer: Hari's Laptop</div>
+                    <div style="margin: 8px 0;">
+                        Progress: <span style="color: var(--accent)">████████████░░░░</span> 78%
+                    </div>
+                    <div style="color: var(--text-muted);">
+                        Epoch: 4/5 | ETA: 3m 42s
+                    </div>
+                    <div style="margin-top: 8px; color: var(--accent-sec);">
+                        Earning: ₹2.10 so far
+                    </div>
+                </div>
+            </div>
+
+            <!-- Trust -->
+            <div class="card">
+                <h2>Trust + Reputation</h2>
+                <div>
+                    <div class="trust-score">94 / 100</div>
+                    <div style="font-family: monospace; color: var(--accent); letter-spacing: 2px; margin-bottom: 12px;">██████████████████░░</div>
+                    
+                    <div style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.6;">
+                        Jobs Completed: <span style="color: var(--text-main);">17</span><br>
+                        Uptime: <span style="color: var(--text-main);">96%</span><br>
+                        Reputation: <span style="color: var(--accent-sec);">Excellent</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- History -->
+    <div class="card">
+        <h2>Earnings History</h2>
+        <div style="margin-bottom: 16px; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem;">
+            Session Earnings: <span style="color: var(--accent)">₹42.50</span>
+        </div>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Job ID</th>
+                    <th>Duration</th>
+                    <th>Earned</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td style="font-family: monospace;">#xyz789</td>
+                    <td>1h 45m</td>
+                    <td style="color: var(--accent-sec)">₹26.25</td>
+                    <td style="color: var(--text-muted)">Completed</td>
+                </tr>
+                <tr>
+                    <td style="font-family: monospace;">#def456</td>
+                    <td>45m</td>
+                    <td style="color: var(--accent-sec)">₹11.25</td>
+                    <td style="color: var(--text-muted)">Completed</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        const vscode = acquireVsCodeApi();
+        
+        const agentBtn = document.getElementById('agentBtn');
+        const terminalLog = document.getElementById('terminalLog');
+        const onlineDot = document.getElementById('onlineDot');
+        
+        let agentRunning = false;
+
+        function appendLog(msg) {
+            const time = new Date().toLocaleTimeString([], {hour12: false});
+            terminalLog.innerHTML += `<div><span style="color:var(--text-muted)">[${time}]</span> ${msg}</div>`;
+            terminalLog.scrollTop = terminalLog.scrollHeight;
+        }
+
+        agentBtn.addEventListener('click', () => {
+            if (!agentRunning) {
+                agentRunning = true;
+                agentBtn.innerHTML = '⏹ STOP AGENT';
+                agentBtn.classList.add('danger');
+                onlineDot.style.backgroundColor = 'var(--accent-sec)';
+                onlineDot.style.boxShadow = '0 0 8px var(--accent-sec)';
+                
+                vscode.postMessage({ type: 'startProvider' });
+                appendLog('Starting provider agent...');
+                
+                // Demo log simulation if backend isn't there
+                setTimeout(() => appendLog('Connecting to coordinator...'), 500);
+                setTimeout(() => appendLog('GPU Detected: NVIDIA RTX 4070 Ti (12GB)'), 1000);
+                setTimeout(() => appendLog('Node registered. Listening for workloads...'), 1500);
+            } else {
+                agentRunning = false;
+                agentBtn.innerHTML = '▶ START PROVIDER AGENT';
+                agentBtn.classList.remove('danger');
+                onlineDot.style.backgroundColor = 'var(--danger)';
+                onlineDot.style.boxShadow = '0 0 8px var(--danger)';
+                
+                vscode.postMessage({ type: 'stopProvider' });
+                appendLog('Stopping agent...');
+            }
+        });
+
+        window.addEventListener('message', event => {
+            const message = event.data;
+            switch (message.type) {
+                case 'providerLog':
+                    appendLog(message.data);
+                    break;
+            }
+        });
+        
+        // Bar animation simulation
+        setInterval(() => {
+            if(!agentRunning) return;
+            const util = Math.floor(60 + Math.random() * 10);
+            const filled = Math.floor(util / 5);
+            let bar = '';
+            for(let i=0; i<20; i++) bar += i < filled ? '█' : '░';
+            document.getElementById('bar-util').innerText = bar;
+            document.getElementById('bar-util').nextElementSibling.innerText = util + '%';
+        }, 2000);
+    </script>
+</body>
+</html>

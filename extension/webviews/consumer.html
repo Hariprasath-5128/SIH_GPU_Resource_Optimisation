@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPUShare Consumer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0d1117;
+            --bg-card: #161b22;
+            --border: #21262d;
+            --accent: #00d9a3;
+            --accent-sec: #7ee787;
+            --danger: #f85149;
+            --warning: #d29922;
+            --text-main: #c9d1d9;
+            --text-muted: #8b949e;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 24px;
+        }
+
+        .header-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .role-badge {
+            background-color: rgba(0, 217, 163, 0.1);
+            color: var(--accent);
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .header-stats {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        /* Subtle noise texture */
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.02'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        .card > * { position: relative; z-index: 1; }
+
+        h2 { margin-top: 0; font-size: 1.1rem; color: #fff; margin-bottom: 20px; }
+
+        .flex-row { display: flex; gap: 20px; }
+        .flex-col { flex: 1; }
+
+        /* Metrics */
+        .metric-label { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px; }
+        .metric-bar-bg { height: 8px; background: #2d333b; border-radius: 4px; overflow: hidden; }
+        .metric-bar-fill { height: 100%; transition: width 0.3s ease, background-color 0.3s ease; }
+        .metric-value { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; margin-top: 6px; text-align: right; }
+
+        .score-box {
+            text-align: center;
+            padding: 16px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+        .score-val { font-family: 'JetBrains Mono', monospace; font-size: 2.5rem; font-weight: 600; color: var(--accent); }
+
+        /* Form */
+        .form-group { margin-bottom: 16px; }
+        label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px; }
+        input, select {
+            width: 100%;
+            background: #0d1117;
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 10px 12px;
+            border-radius: 6px;
+            font-family: inherit;
+            box-sizing: border-box;
+        }
+        input:focus, select:focus { border-color: var(--accent); outline: none; }
+
+        button {
+            background-color: var(--accent);
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.2s ease;
+        }
+        button:hover { background-color: var(--accent-sec); transform: translateY(-1px); }
+        button.danger { background-color: transparent; border: 1px solid var(--danger); color: var(--danger); }
+        button.danger:hover { background-color: rgba(248, 81, 73, 0.1); }
+
+        /* Job Monitor */
+        .job-monitor { display: none; }
+        .job-monitor.active { display: block; }
+        
+        .terminal-box {
+            font-family: 'JetBrains Mono', monospace;
+            background: #000;
+            border: 1px solid var(--border);
+            padding: 16px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+
+        .table { width: 100%; border-collapse: collapse; }
+        .table th, .table td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+        .table th { color: var(--text-muted); font-weight: 500; }
+
+        .alert {
+            display: none;
+            background: rgba(248, 81, 73, 0.1);
+            border: 1px solid var(--danger);
+            color: var(--danger);
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        .alert.active { display: block; animation: pulse 2s infinite; }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(248,81,73, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(248,81,73, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(248,81,73, 0); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="header-title">
+            GPU Share <span class="role-badge">Consumer</span>
+        </div>
+        <div class="header-stats">
+            Balance: <span style="color: var(--accent)">₹<span id="balance">87.50</span></span>
+            <a href="#" style="color: var(--text-muted); font-family: 'Inter'; font-size: 0.85rem; margin-left: 10px;">Configure</a>
+        </div>
+    </div>
+
+    <div class="alert" id="interruptionAlert">
+        ⚠ Provider disconnected! Restoring from Epoch 3 checkpoint...<br>
+        <span style="color: var(--text-main); font-weight: normal; font-size: 0.85rem; margin-top: 8px; display: inline-block;">[Checkpoint restored ✓] → Searching for new GPU...</span>
+    </div>
+
+    <div class="flex-row">
+        <!-- Provider Network -->
+        <div class="card flex-col">
+            <h2 style="display: flex; justify-content: space-between;">
+                <span>Available Network</span>
+                <span style="font-size: 0.8rem; color: var(--accent-sec); display: flex; align-items: center; gap: 6px;">
+                    <div style="width:8px;height:8px;border-radius:50%;background:var(--accent-sec)"></div> RTX 4090 Ready
+                </span>
+            </h2>
+            
+            <div class="flex-row" style="margin-bottom: 20px; align-items: center;">
+                <div class="score-box" style="width: 120px;">
+                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px;">GPUMatch</div>
+                    <div class="score-val" id="gpuScore">92</div>
+                    <div style="font-size: 0.75rem; color: var(--accent-sec);">Excellent</div>
+                </div>
+                <div class="flex-col">
+                    <div class="metric-label">Availability (30m): 96.2%</div>
+                    <div class="metric-label">Network: 1.2 Gbps</div>
+                    <div class="metric-label">Cost: ₹15/hr (Save 82% vs Cloud)</div>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 12px;">
+                <div class="metric-label">GPU Utilization</div>
+                <div class="metric-bar-bg"><div class="metric-bar-fill" style="width: 12%; background: var(--accent);"></div></div>
+            </div>
+            <div>
+                <div class="metric-label">VRAM Usage</div>
+                <div class="metric-bar-bg"><div class="metric-bar-fill" style="width: 25%; background: var(--accent);"></div></div>
+                <div class="metric-value">6.1 / 24 GB</div>
+            </div>
+        </div>
+
+        <!-- Submit Job -->
+        <div class="card flex-col" id="submitSection">
+            <h2>Submit Workload</h2>
+            <div class="form-group">
+                <label>Workload</label>
+                <select id="workload">
+                    <option>YOLO Training v8n</option>
+                    <option>Stable Diffusion Inference</option>
+                    <option>LLM Fine-tuning (LoRA)</option>
+                </select>
+            </div>
+            <div class="flex-row">
+                <div class="form-group flex-col">
+                    <label>Epochs</label>
+                    <input type="number" value="10" id="epochs">
+                </div>
+                <div class="form-group flex-col">
+                    <label>VRAM Req (GB)</label>
+                    <input type="number" value="8" id="vram">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Budget Limit (₹)</label>
+                <input type="number" value="25" id="budget">
+            </div>
+            <button id="submitBtn">▶ SUBMIT JOB</button>
+        </div>
+
+        <!-- Job Monitor -->
+        <div class="card flex-col job-monitor" id="monitorSection">
+            <h2 style="color: var(--accent);">JOB EXECUTING</h2>
+            <div class="terminal-box">
+                <div style="margin-bottom: 12px;">
+                    Job #<span id="jobIdDisplay"></span> | Provider: Hari's RTX 4090
+                </div>
+                <div style="margin-bottom: 8px;">
+                    Progress: <span style="color: var(--accent)">████████████░░░░ <span id="progressPct">78</span>%</span>
+                </div>
+                <div style="color: var(--text-muted); margin-bottom: 12px;">
+                    Epoch: <span id="epochVal">4</span>/10 | ETA: <span id="etaVal">3m 42s</span>
+                </div>
+                
+                <div class="flex-row" style="margin-bottom: 12px; font-size: 0.8rem; border-top: 1px solid var(--border); padding-top: 12px;">
+                    <div class="flex-col">Util: 98%<br>VRAM: 9.1GB</div>
+                    <div class="flex-col">Cost: ₹2.10<br>Save: 97%</div>
+                </div>
+                
+                <div style="color: var(--accent-sec);">Checkpoints: 3 saved ✓</div>
+            </div>
+            <div style="margin-top: 16px;">
+                <button class="danger" id="cancelBtn">⏹ CANCEL JOB</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- History -->
+    <div class="card">
+        <h2>Transaction History</h2>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Job ID</th>
+                    <th>Provider</th>
+                    <th>Cost</th>
+                    <th>Savings</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td style="font-family: monospace;">#f8a291</td>
+                    <td>Alex's 3080</td>
+                    <td>₹12.50</td>
+                    <td style="color: var(--accent-sec)">₹65 (83%)</td>
+                    <td style="color: var(--text-muted)">Completed</td>
+                </tr>
+                <tr>
+                    <td style="font-family: monospace;">#b39c12</td>
+                    <td>Sam's 4070</td>
+                    <td>₹4.20</td>
+                    <td style="color: var(--accent-sec)">₹22 (84%)</td>
+                    <td style="color: var(--text-muted)">Completed</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        const vscode = acquireVsCodeApi();
+        
+        const submitBtn = document.getElementById('submitBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const submitSection = document.getElementById('submitSection');
+        const monitorSection = document.getElementById('monitorSection');
+        
+        let simInterval;
+
+        submitBtn.addEventListener('click', () => {
+            submitBtn.innerHTML = 'Submitting...';
+            submitBtn.style.opacity = '0.7';
+            
+            // Simulate network request
+            setTimeout(() => {
+                const jobId = Math.random().toString(36).substring(2, 8);
+                document.getElementById('jobIdDisplay').innerText = jobId;
+                
+                submitSection.style.display = 'none';
+                monitorSection.classList.add('active');
+                
+                vscode.postMessage({
+                    type: 'submitJob',
+                    data: {
+                        workload: document.getElementById('workload').value,
+                        epochs: document.getElementById('epochs').value,
+                        vram: document.getElementById('vram').value,
+                        budget: document.getElementById('budget').value
+                    }
+                });
+
+                startSimulation();
+            }, 800);
+        });
+
+        cancelBtn.addEventListener('click', () => {
+            clearInterval(simInterval);
+            monitorSection.classList.remove('active');
+            submitSection.style.display = 'block';
+            submitBtn.innerHTML = '▶ SUBMIT JOB';
+            submitBtn.style.opacity = '1';
+        });
+
+        // Simulating job progress for demo
+        function startSimulation() {
+            let progress = 0;
+            simInterval = setInterval(() => {
+                progress += Math.random() * 5;
+                if(progress > 100) progress = 100;
+                
+                document.getElementById('progressPct').innerText = Math.floor(progress);
+                document.getElementById('epochVal').innerText = Math.floor((progress/100) * document.getElementById('epochs').value);
+                
+                // Simulate interruption around 60%
+                if(progress > 55 && progress < 65 && !document.getElementById('interruptionAlert').classList.contains('active')) {
+                    document.getElementById('interruptionAlert').classList.add('active');
+                    setTimeout(() => {
+                        document.getElementById('interruptionAlert').classList.remove('active');
+                    }, 4000);
+                }
+
+                if(progress >= 100) {
+                    clearInterval(simInterval);
+                    setTimeout(() => cancelBtn.click(), 2000);
+                }
+            }, 1000);
+        }
+
+        window.addEventListener('message', event => {
+            const message = event.data;
+            switch (message.type) {
+                case 'balanceUpdated':
+                    if(message.data.balance) document.getElementById('balance').innerText = message.data.balance.toFixed(2);
+                    break;
+                // Add more handlers as real API comes online
+            }
+        });
+    </script>
+</body>
+</html>

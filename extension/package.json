@@ -1,0 +1,48 @@
+{
+  "name": "gpushare",
+  "displayName": "GPUShare — Peer GPU Sharing",
+  "description": "Intelligent peer-to-peer GPU sharing. Submit AI workloads to a friend's GPU.",
+  "version": "1.0.0",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Machine Learning"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {"command": "gpushare.openConsumer", "title": "GPUShare: Open Consumer Dashboard", "icon": "$(circuit-board)"},
+      {"command": "gpushare.openProvider", "title": "GPUShare: Open Provider Dashboard", "icon": "$(server-process)"},
+      {"command": "gpushare.configure", "title": "GPUShare: Configure Coordinator URL"}
+    ],
+    "viewsContainers": {
+      "activitybar": [{
+        "id": "gpushare",
+        "title": "GPUShare",
+        "icon": "$(circuit-board)"
+      }]
+    },
+    "views": {
+      "gpushare": [
+        {"id": "gpushare.networkView", "name": "Network", "type": "webview"},
+        {"id": "gpushare.jobsView", "name": "Jobs", "type": "webview"}
+      ]
+    },
+    "configuration": {
+      "title": "GPUShare",
+      "properties": {
+        "gpushare.coordinatorUrl": {
+          "type": "string",
+          "default": "http://localhost:8000",
+          "description": "URL of the GPUShare coordinator server"
+        },
+        "gpushare.role": {
+          "type": "string",
+          "enum": ["consumer", "provider"],
+          "default": "consumer",
+          "description": "Your role in the GPUShare network"
+        }
+      }
+    }
+  },
+  "scripts": { "vscode:prepublish": "echo done" },
+  "devDependencies": { "@types/vscode": "^1.85.0" }
+}

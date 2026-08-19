@@ -257,6 +257,7 @@ class JobSubmitReq(BaseModel):
     max_budget: float
     estimated_minutes: int
     batch_size: Optional[int] = 256
+    epochs: Optional[int] = 10
     input_hash: Optional[str] = None
 
 @app.post("/api/jobs/submit")
@@ -305,6 +306,7 @@ def submit_job(req: JobSubmitReq, db: Session = Depends(get_db)):
         vram_required_gb=req.vram_required_gb,
         max_budget=req.max_budget,
         batch_size=req.batch_size,
+        epochs=req.epochs,
         status="QUEUED",
         gpumatch_score=best_score,
         expected_cost=match_details.get("expected_cost"),
@@ -544,7 +546,7 @@ def get_pending_job(node_id: str, db: Session = Depends(get_db)):
             "job_id": job.job_id,
             "workload_type": job.workload_type,
             "model_name": job.model_name or "yolov8n.pt",
-            "epochs": max(10, (job.estimated_minutes or 10) // 2),
+            "epochs": job.epochs,
             "data": "coco8.yaml",
             "checkpoint_dir": f"./checkpoints/job_{job.job_id}",
             "resume_epoch": latest_chk.epoch if latest_chk else 0,

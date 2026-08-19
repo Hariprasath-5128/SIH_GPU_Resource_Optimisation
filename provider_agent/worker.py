@@ -5,6 +5,17 @@ import requests
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import shutil
+import tempfile
+
+def _verify_cuda_or_raise():
+    """Fail-fast initialization hook called by Agent before spinning up a worker thread."""
+    if not torch.cuda.is_available():
+        raise RuntimeError("NVIDIA GPU is required but not found or configured incorrectly.")
+    try:
+        _ = torch.tensor([1.0]).cuda()
+    except Exception as e:
+        raise RuntimeError(f"CUDA initialization failed: {e}")
 
 class HeavyVisionModel(nn.Module):
     def __init__(self):
@@ -127,9 +138,18 @@ class YOLOWorker:
         final_path = os.path.join(self.checkpoint_dir, "final_model.pt")
         torch.save(self.model.state_dict(), final_path)
         
+        # 5. Zip the outputs securely outside the checkpoint directory
+        temp_dir = os.path.join(tempfile.gettempdir(), "gpushare_outputs")
+        os.makedirs(temp_dir, exist_ok=True)
+        zip_path = os.path.join(temp_dir, f"job_{self.job_id}")
+        
+        print(f"[Worker] Zipping outputs to {zip_path}.zip...")
+        shutil.make_archive(zip_path, 'zip', root_dir=self.checkpoint_dir)
+        
         return {
             "output_path": final_path,
             "output_hash": self.get_output_hash(final_path),
+            "zip_file": f"{zip_path}.zip",
             "status": "completed"
         }
 

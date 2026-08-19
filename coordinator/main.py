@@ -37,6 +37,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+main_loop = None
 
 class ConnectionManager:
     def __init__(self):
@@ -50,11 +51,12 @@ class ConnectionManager:
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
 
-    async def broadcast(self, message: dict):
+    def broadcast(self, message: dict):
         msg_str = json.dumps(message)
         for connection in list(self.active_connections):
-            # Fire and forget to prevent a hanging client from blocking the event loop
-            asyncio.create_task(self._send_with_timeout(connection, msg_str))
+            # Safe to call from threadpool workers
+            if main_loop:
+                asyncio.run_coroutine_threadsafe(self._send_with_timeout(connection, msg_str), main_loop)
 
     async def _send_with_timeout(self, connection: WebSocket, msg_str: str):
         try:
@@ -80,6 +82,9 @@ def seed_db():
 
 @app.on_event("startup")
 async def startup_event():
+    global main_loop
+    main_loop = asyncio.get_running_loop()
+    
     create_tables()
     seed_db()
     asyncio.create_task(heartbeat_monitor())
@@ -95,8 +100,8 @@ async def startup_event():
 
 async def heartbeat_monitor():
     while True:
+        db = SessionLocal()
         try:
-            db = SessionLocal()
             cutoff = datetime.utcnow() - timedelta(seconds=20)
             stale_nodes = db.query(GpuNode).filter(GpuNode.last_heartbeat < cutoff, GpuNode.status == "online").all()
             
@@ -107,24 +112,25 @@ async def heartbeat_monitor():
                 active_jobs = db.query(Job).filter(Job.node_id == node.node_id, Job.status == "EXECUTING").all()
                 for job in active_jobs:
                     job.status = "INTERRUPTED"
-                    await manager.broadcast({
+                    manager.broadcast({
                         "event": "job_interrupted",
                         "job_id": job.job_id,
                         "node_id": node.node_id
                     })
                 
-                await manager.broadcast({
+                manager.broadcast({
                     "event": "node_offline",
                     "node_id": node.node_id
                 })
             
             if stale_nodes:
                 db.commit()
-            
-            db.close()
+                
         except Exception as e:
             print(f"Heartbeat monitor error: {e}")
-        
+        finally:
+            db.close()
+            
         await asyncio.sleep(10)
 
 @app.websocket("/ws")
@@ -159,7 +165,7 @@ class NodeRegisterReq(BaseModel):
     port: int
 
 @app.post("/api/nodes/register")
-async def register_node(req: NodeRegisterReq, db: Session = Depends(get_db)):
+def register_node(req: NodeRegisterReq, db: Session = Depends(get_db)):
     node_id = f"node_{uuid.uuid4().hex[:8]}"
     benchmark = GPU_BENCHMARK_TABLE.get(req.gpu_model, 50.0)
     
@@ -178,7 +184,7 @@ async def register_node(req: NodeRegisterReq, db: Session = Depends(get_db)):
     db.add(node)
     db.commit()
     
-    await manager.broadcast({"event": "node_registered", "node_id": node_id})
+    manager.broadcast({"event": "node_registered", "node_id": node_id})
     return {"node_id": node_id, "status": "online"}
 
 class HeartbeatReq(BaseModel):
@@ -254,7 +260,7 @@ class JobSubmitReq(BaseModel):
     input_hash: Optional[str] = None
 
 @app.post("/api/jobs/submit")
-async def submit_job(req: JobSubmitReq, db: Session = Depends(get_db)):
+def submit_job(req: JobSubmitReq, db: Session = Depends(get_db)):
     # Run GPUMatch
     nodes = db.query(GpuNode).filter(GpuNode.status == "online").all()
     best_match = None
@@ -309,7 +315,7 @@ async def submit_job(req: JobSubmitReq, db: Session = Depends(get_db)):
     db.add(job)
     db.commit()
 
-    await manager.broadcast({
+    manager.broadcast({
         "event": "job_submitted",
         "job_id": job_id,
         "node_id": best_match.node_id
@@ -334,14 +340,14 @@ def get_job(job_id: str, db: Session = Depends(get_db)):
     }
 
 @app.post("/api/jobs/{job_id}/start")
-async def start_job(job_id: str, db: Session = Depends(get_db)):
+def start_job(job_id: str, db: Session = Depends(get_db)):
     job = db.query(Job).filter(Job.job_id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     job.status = "EXECUTING"
     job.started_at = datetime.utcnow()
     db.commit()
-    await manager.broadcast({"event": "job_started", "job_id": job_id})
+    manager.broadcast({"event": "job_started", "job_id": job_id})
     return {"status": "EXECUTING"}
 
 class ProgressReq(BaseModel):
@@ -350,8 +356,8 @@ class ProgressReq(BaseModel):
     eta_seconds: int
 
 @app.post("/api/jobs/{job_id}/progress")
-async def job_progress(job_id: str, req: ProgressReq, db: Session = Depends(get_db)):
-    await manager.broadcast({
+def job_progress(job_id: str, req: ProgressReq, db: Session = Depends(get_db)):
+    manager.broadcast({
         "event": "job_progress",
         "job_id": job_id,
         "epoch": req.epoch,
@@ -397,7 +403,7 @@ def upload_job_output(job_id: str, file: UploadFile = File(...), db: Session = D
     return {"status": "ok", "file_path": file_path}
 
 @app.get("/api/jobs/{job_id}/download_output")
-async def download_job_output(job_id: str, db: Session = Depends(get_db)):
+def download_job_output(job_id: str, db: Session = Depends(get_db)):
     job = db.query(Job).filter(Job.job_id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -412,7 +418,7 @@ async def download_job_output(job_id: str, db: Session = Depends(get_db)):
     )
 
 @app.post("/api/jobs/{job_id}/complete")
-async def complete_job(job_id: str, req: JobCompleteReq, db: Session = Depends(get_db)):
+def complete_job(job_id: str, req: JobCompleteReq, db: Session = Depends(get_db)):
     job = db.query(Job).filter(Job.job_id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -451,17 +457,17 @@ async def complete_job(job_id: str, req: JobCompleteReq, db: Session = Depends(g
         node.jobs_total += 1
     job.status = "COMPLETED"
     db.commit()
-    await manager.broadcast({"event": "job_completed", "job_id": job_id})
+    manager.broadcast({"event": "job_completed", "job_id": job_id})
     return {"status": "COMPLETED", "verified": job.verified}
 
 @app.post("/api/jobs/{job_id}/interrupt")
-async def interrupt_job(job_id: str, db: Session = Depends(get_db)):
+def interrupt_job(job_id: str, db: Session = Depends(get_db)):
     job = db.query(Job).filter(Job.job_id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     job.status = "INTERRUPTED"
     db.commit()
-    await manager.broadcast({"event": "job_interrupted", "job_id": job_id})
+    manager.broadcast({"event": "job_interrupted", "job_id": job_id})
     return {"status": "INTERRUPTED"}
 
 @app.get("/api/jobs/{job_id}/checkpoints")
@@ -527,13 +533,13 @@ def get_pending_job(node_id: str, db: Session = Depends(get_db)):
 
 # ── Node Offline / Graceful Shutdown ───────────────────────────────────────
 @app.post("/api/nodes/{node_id}/offline")
-async def node_offline(node_id: str, db: Session = Depends(get_db)):
+def node_offline(node_id: str, db: Session = Depends(get_db)):
     """Called by provider agent on graceful shutdown."""
     node = db.query(GpuNode).filter(GpuNode.node_id == node_id).first()
     if node:
         node.status = "offline"
         db.commit()
-        await manager.broadcast({"event": "node_offline", "node_id": node_id})
+        manager.broadcast({"event": "node_offline", "node_id": node_id})
     return {"status": "offline"}
 
 # ── Coordinator entry point ─────────────────────────────────────────────────

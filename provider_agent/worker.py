@@ -8,20 +8,22 @@ import torch.optim as optim
 
 
 
-class SmallVisionModel(nn.Module):
+class BalancedVisionModel(nn.Module):
     def __init__(self):
         super().__init__()
-        # Lightweight 2-conv model — fast epochs, tiny .pt, light on VRAM
+        # ~1.1M parameters -> ~4.5 MB .pt file size
         self.features = nn.Sequential(
-            nn.Conv2d(3, 16, kernel_size=3, padding=1),
+            nn.Conv2d(3, 32, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(2),
-            nn.Conv2d(16, 32, kernel_size=3, padding=1),
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
-            nn.AdaptiveAvgPool2d((1, 1))
+            nn.AdaptiveAvgPool2d((4, 4))  # 64 * 4 * 4 = 1024 features
         )
         self.classifier = nn.Sequential(
-            nn.Linear(32, 10)
+            nn.Linear(1024, 1024),
+            nn.ReLU(inplace=True),
+            nn.Linear(1024, 10)
         )
 
     def forward(self, x):
@@ -37,12 +39,12 @@ class YOLOWorker:
         self.job_id = job_id
         
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model = SmallVisionModel().to(self.device)
+        self.model = BalancedVisionModel().to(self.device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=0.001)
         self.criterion = nn.CrossEntropyLoss()
 
     def run(self):
-        print(f"[Worker] Starting Small Workload for job {self.job_id} on {self.device}")
+        print(f"[Worker] Starting Balanced Workload for job {self.job_id} on {self.device}")
         total_epochs = self.job_config.get('epochs', 10)
         batch_size = self.job_config.get('batch_size', 16)
         print(f"[Worker] Using Batch Size: {batch_size}")
@@ -69,13 +71,13 @@ class YOLOWorker:
             except Exception as e:
                 print(f"[Worker] Failed to load checkpoint: {e}")
 
-        # Small dummy tensors — light on VRAM, fast forward pass
-        dummy_input = torch.randn(batch_size, 3, 32, 32).to(self.device)
+        # Moderate dummy tensors — ~150MB VRAM footprint
+        dummy_input = torch.randn(batch_size, 3, 128, 128).to(self.device)
         dummy_target = torch.randint(0, 10, (batch_size,)).to(self.device)
 
-        # Modest matmul to give a small but visible GPU utilisation blip
-        compute_A = torch.randn(2048, 2048, device=self.device)
-        compute_B = torch.randn(2048, 2048, device=self.device)
+        # Modest matmul to give a visible GPU utilisation blip (~300MB VRAM footprint)
+        compute_A = torch.randn(4096, 4096, device=self.device)
+        compute_B = torch.randn(4096, 4096, device=self.device)
 
         for epoch in range(start_epoch, total_epochs + 1):
             try:
@@ -132,7 +134,7 @@ class YOLOWorker:
 
     def _save_checkpoint(self, epoch):
         path = os.path.join(self.checkpoint_dir, f"checkpoint_epoch_{epoch}.pt")
-        # Save only model_state_dict (not optimizer) so each checkpoint is ~85MB, not ~255MB
+        # Save only model_state_dict (not optimizer) so each checkpoint is ~4.5MB
         torch.save({'epoch': epoch, 'model_state_dict': self.model.state_dict()}, path)
         try:
             requests.post(f"{self.coordinator_url}/api/jobs/{self.job_id}/checkpoint", json={

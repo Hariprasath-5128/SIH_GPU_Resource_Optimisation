@@ -72,14 +72,14 @@ class YOLOWorker:
         dummy_input = torch.randn(batch_size, 3, 32, 32).to(self.device)
         dummy_target = torch.randint(0, 10, (batch_size,)).to(self.device)
 
-        # A modest compute matrix to slightly bump GPU utilization into the "visible" range (~20-40%)
-        compute_A = torch.randn(2048, 2048, device=self.device)
-        compute_B = torch.randn(2048, 2048, device=self.device)
+        # Compute matrices sized to produce a noticeable but safe GPU utilisation spike (~30-55%)
+        compute_A = torch.randn(3072, 3072, device=self.device)
+        compute_B = torch.randn(3072, 3072, device=self.device)
 
         for epoch in range(start_epoch, total_epochs + 1):
             try:
-                for step in range(20): # Increased steps for visible utilization
-                    # A small matrix multiplication to engage the CUDA cores
+                for step in range(30): # 30 steps keeps utilisation clearly visible without going overboard
+                    # Matrix multiply saturates CUDA cores without touching much extra VRAM
                     _ = torch.matmul(compute_A, compute_B)
                     
                     self.optimizer.zero_grad()
@@ -87,7 +87,7 @@ class YOLOWorker:
                     loss = self.criterion(output, dummy_target)
                     loss.backward()
                     self.optimizer.step()
-                    time.sleep(0.02) 
+                    time.sleep(0.01) # slight yield so OS stays responsive
                 
                 print(f"[Worker] Epoch {epoch}/{total_epochs} completed. Loss: {loss.item():.4f}")
                 self._save_checkpoint(epoch)

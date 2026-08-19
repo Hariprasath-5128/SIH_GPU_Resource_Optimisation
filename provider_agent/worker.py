@@ -84,6 +84,21 @@ class YOLOWorker:
         compute_A = torch.randn(3072, 3072, device=self.device)
         compute_B = torch.randn(3072, 3072, device=self.device)
 
+        # Allocate a VRAM buffer so dedicated GPU memory shows ~50% full in Task Manager
+        # Dynamically calculated: 50% of total VRAM minus what the model + optimizer already use
+        self.vram_buffer = None
+        if torch.cuda.is_available():
+            try:
+                total_vram = torch.cuda.get_device_properties(0).total_memory
+                target_bytes = int(total_vram * 0.50)
+                overhead_bytes = 450 * 1024 * 1024  # ~450MB for model + optimizer + activations
+                buffer_bytes = max(0, target_bytes - overhead_bytes)
+                num_floats = buffer_bytes // 4
+                self.vram_buffer = torch.empty(num_floats, dtype=torch.float32, device=self.device)
+                print(f"[Worker] VRAM buffer: {buffer_bytes / (1024**3):.2f} GB allocated (targeting ~50% of {total_vram / (1024**3):.1f} GB total)")
+            except RuntimeError:
+                print("[Worker] WARNING: Could not allocate VRAM buffer — continuing without it")
+
         for epoch in range(start_epoch, total_epochs + 1):
             try:
                 for step in range(30): # 30 steps keeps utilisation clearly visible without going overboard
@@ -118,13 +133,14 @@ class YOLOWorker:
         final_path = os.path.join(self.checkpoint_dir, "final_model.pt")
         torch.save(self.model.state_dict(), final_path)
         
-        # Explicitly flush the GPU buffer so VRAM drops immediately back to zero
+        # Explicitly flush everything so VRAM drops immediately back to zero after transfer
         print("[Worker] Flushing GPU memory buffer...")
         try:
             del dummy_input
             del dummy_target
             del compute_A
             del compute_B
+            del self.vram_buffer
             del self.model
             del self.optimizer
         except Exception:
@@ -141,7 +157,8 @@ class YOLOWorker:
 
     def _save_checkpoint(self, epoch):
         path = os.path.join(self.checkpoint_dir, f"checkpoint_epoch_{epoch}.pt")
-        torch.save({'epoch': epoch, 'model_state_dict': self.model.state_dict(), 'optimizer_state_dict': self.optimizer.state_dict()}, path)
+        # Save only model_state_dict (not optimizer) so each checkpoint is ~85MB, not ~255MB
+        torch.save({'epoch': epoch, 'model_state_dict': self.model.state_dict()}, path)
         try:
             requests.post(f"{self.coordinator_url}/api/jobs/{self.job_id}/checkpoint", json={
                 "epoch": epoch, "file_path": path, "file_hash": self.get_output_hash(path), "size_bytes": os.path.getsize(path)

@@ -52,11 +52,16 @@ class ConnectionManager:
 
     async def broadcast(self, message: dict):
         msg_str = json.dumps(message)
-        for connection in self.active_connections:
-            try:
-                await connection.send_text(msg_str)
-            except Exception:
-                pass
+        for connection in list(self.active_connections):
+            # Fire and forget to prevent a hanging client from blocking the event loop
+            asyncio.create_task(self._send_with_timeout(connection, msg_str))
+
+    async def _send_with_timeout(self, connection: WebSocket, msg_str: str):
+        try:
+            # 1 second timeout — if a client takes longer than this to receive, drop it
+            await asyncio.wait_for(connection.send_text(msg_str), timeout=1.0)
+        except Exception:
+            self.disconnect(connection)
 
 manager = ConnectionManager()
 

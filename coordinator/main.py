@@ -428,17 +428,20 @@ def upload_job_output(job_id: str, file: UploadFile = File(...), db: Session = D
     return {"status": "ok", "file_path": file_path}
 
 @app.get("/api/jobs/{job_id}/download_output")
-def download_job_output(job_id: str, db: Session = Depends(get_db)):
-    job = db.query(Job).filter(Job.job_id == job_id).first()
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
+def download_job_output(job_id: str):
+    with SessionLocal() as db:
+        job = db.query(Job).filter(Job.job_id == job_id).first()
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+            
+        output_file_path = job.output_file_path
         
-    if not job.output_file_path or not os.path.exists(job.output_file_path):
+    if not output_file_path or not os.path.exists(output_file_path):
         raise HTTPException(status_code=404, detail="Output file not found for this job")
         
     return FileResponse(
-        path=job.output_file_path,
-        filename=os.path.basename(job.output_file_path),
+        path=output_file_path,
+        filename=os.path.basename(output_file_path),
         media_type="application/zip"
     )
 

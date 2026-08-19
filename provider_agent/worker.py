@@ -72,15 +72,22 @@ class YOLOWorker:
         dummy_input = torch.randn(batch_size, 3, 32, 32).to(self.device)
         dummy_target = torch.randint(0, 10, (batch_size,)).to(self.device)
 
+        # A modest compute matrix to slightly bump GPU utilization into the "visible" range (~20-40%)
+        compute_A = torch.randn(2048, 2048, device=self.device)
+        compute_B = torch.randn(2048, 2048, device=self.device)
+
         for epoch in range(start_epoch, total_epochs + 1):
             try:
-                for step in range(5): # Reduced steps per epoch for fast simulation
+                for step in range(20): # Increased steps for visible utilization
+                    # A small matrix multiplication to engage the CUDA cores
+                    _ = torch.matmul(compute_A, compute_B)
+                    
                     self.optimizer.zero_grad()
                     output = self.model(dummy_input)
                     loss = self.criterion(output, dummy_target)
                     loss.backward()
                     self.optimizer.step()
-                    time.sleep(0.05) 
+                    time.sleep(0.02) 
                 
                 print(f"[Worker] Epoch {epoch}/{total_epochs} completed. Loss: {loss.item():.4f}")
                 self._save_checkpoint(epoch)
@@ -102,6 +109,21 @@ class YOLOWorker:
 
         final_path = os.path.join(self.checkpoint_dir, "final_model.pt")
         torch.save(self.model.state_dict(), final_path)
+        
+        # Explicitly flush the GPU buffer so VRAM drops immediately back to zero
+        print("[Worker] Flushing GPU memory buffer...")
+        try:
+            del dummy_input
+            del dummy_target
+            del compute_A
+            del compute_B
+            del self.model
+            del self.optimizer
+        except Exception:
+            pass
+            
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         
         return {
             "output_path": final_path,

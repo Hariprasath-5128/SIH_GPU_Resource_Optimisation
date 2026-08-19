@@ -10,7 +10,19 @@ import threading
 import requests
 import os
 from gpu_probe import GPUProbe
-from worker import YOLOWorker, _verify_cuda_or_raise
+from worker import YOLOWorker
+import torch
+import shutil
+import tempfile
+
+def _verify_cuda_or_raise():
+    """Fail-fast initialization hook called by Agent before spinning up a worker thread."""
+    if not torch.cuda.is_available():
+        raise RuntimeError("NVIDIA GPU is required but not found or configured incorrectly.")
+    try:
+        _ = torch.tensor([1.0]).cuda()
+    except Exception as e:
+        raise RuntimeError(f"CUDA initialization failed: {e}")
 
 class ProviderAgent:
     def __init__(self, coordinator_url, price, node_id, provider_id):
@@ -171,7 +183,15 @@ class ProviderAgent:
                 result = worker.run()
                 print(f"[Agent] Job {job_id} completed. Output: {result.get('output_path', 'N/A')}")
                 
+                # Fallback: if worker didn't create zip, agent will do it
                 zip_file = result.get("zip_file")
+                if not zip_file or not os.path.exists(zip_file):
+                    temp_dir = os.path.join(tempfile.gettempdir(), "gpushare_outputs")
+                    os.makedirs(temp_dir, exist_ok=True)
+                    zip_file = os.path.join(temp_dir, f"job_{job_id}.zip")
+                    print(f"[Agent] Zipping outputs to {zip_file}...")
+                    shutil.make_archive(zip_file.replace('.zip',''), 'zip', root_dir=checkpoint_dir)
+                
                 if zip_file and os.path.exists(zip_file):
                     print(f"[Agent] Uploading output zip to coordinator...")
                     try:

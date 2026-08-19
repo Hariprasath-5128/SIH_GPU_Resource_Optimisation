@@ -8,22 +8,29 @@ import torch.optim as optim
 
 
 
-class SmallVisionModel(nn.Module):
+class MediumTrainingModel(nn.Module):
     def __init__(self):
         super().__init__()
-        # A very lightweight model for quick testing without stressing the GPU
+        # 3 conv layers + 2 large FC layers → ~21M params → ~85MB .pt file
+        # This makes VRAM usage clearly visible (~300MB) in Task Manager
         self.features = nn.Sequential(
-            nn.Conv2d(3, 16, kernel_size=3, padding=1),
+            nn.Conv2d(3, 64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),
-            nn.MaxPool2d(2),
-            nn.Conv2d(16, 32, kernel_size=3, padding=1),
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(128),
             nn.ReLU(inplace=True),
-            nn.AdaptiveAvgPool2d((1, 1))
+            nn.Conv2d(128, 256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(inplace=True),
+            nn.AdaptiveAvgPool2d((4, 4))  # always outputs 256x4x4 = 4096 features
         )
         self.classifier = nn.Sequential(
-            nn.Linear(32, 10)
+            nn.Linear(4096, 4096),
+            nn.ReLU(inplace=True),
+            nn.Linear(4096, 1000)
         )
-    
+
     def forward(self, x):
         x = self.features(x)
         x = torch.flatten(x, 1)
@@ -37,7 +44,7 @@ class YOLOWorker:
         self.job_id = job_id
         
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model = SmallVisionModel().to(self.device)
+        self.model = MediumTrainingModel().to(self.device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=0.001)
         self.criterion = nn.CrossEntropyLoss()
 
@@ -69,8 +76,9 @@ class YOLOWorker:
             except Exception as e:
                 print(f"[Worker] Failed to load checkpoint: {e}")
 
-        dummy_input = torch.randn(batch_size, 3, 32, 32).to(self.device)
-        dummy_target = torch.randint(0, 10, (batch_size,)).to(self.device)
+        # Use 64x64 inputs — AdaptiveAvgPool always collapses to 4x4 regardless of input size
+        dummy_input = torch.randn(batch_size, 3, 64, 64).to(self.device)
+        dummy_target = torch.randint(0, 1000, (batch_size,)).to(self.device)
 
         # Compute matrices sized to produce a noticeable but safe GPU utilisation spike (~30-55%)
         compute_A = torch.randn(3072, 3072, device=self.device)

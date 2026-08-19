@@ -192,27 +192,33 @@ class HeartbeatReq(BaseModel):
 
 @app.post("/api/nodes/heartbeat")
 async def node_heartbeat(req: HeartbeatReq, db: Session = Depends(get_db)):
-    node = db.query(GpuNode).filter(GpuNode.node_id == req.node_id).first()
-    if not node:
+    import asyncio
+    loop = asyncio.get_event_loop()
+    
+    def _write():
+        node = db.query(GpuNode).filter(GpuNode.node_id == req.node_id).first()
+        if not node:
+            return False
+        node.last_heartbeat = datetime.utcnow()
+        node.status = "online"
+        metric = NodeMetric(
+            node_id=req.node_id,
+            gpu_utilization=req.gpu_utilization,
+            vram_used_gb=req.vram_used_gb,
+            temperature=req.temperature,
+            power_watts=req.power_watts,
+            cpu_utilization=req.cpu_utilization,
+            ram_used_gb=req.ram_used_gb,
+            network_mbps=req.network_mbps,
+            available_vram_gb=req.available_vram_gb
+        )
+        db.add(metric)
+        db.commit()
+        return True
+    
+    found = await loop.run_in_executor(None, _write)
+    if not found:
         raise HTTPException(status_code=404, detail="Node not found")
-    
-    node.last_heartbeat = datetime.utcnow()
-    node.status = "online"
-    
-    metric = NodeMetric(
-        node_id=req.node_id,
-        gpu_utilization=req.gpu_utilization,
-        vram_used_gb=req.vram_used_gb,
-        temperature=req.temperature,
-        power_watts=req.power_watts,
-        cpu_utilization=req.cpu_utilization,
-        ram_used_gb=req.ram_used_gb,
-        network_mbps=req.network_mbps,
-        available_vram_gb=req.available_vram_gb
-    )
-    db.add(metric)
-    db.commit()
-    
     return {"status": "ok"}
 
 @app.get("/api/nodes")
@@ -392,9 +398,11 @@ async def upload_job_output(job_id: str, file: UploadFile = File(...), db: Sessi
     job = db.query(Job).filter(Job.job_id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-        
-    os.makedirs("artifacts", exist_ok=True)
-    file_path = os.path.join("artifacts", f"{job_id}_{file.filename}")
+    
+    # Use absolute path so download_output can always find the file regardless of cwd
+    artifacts_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "artifacts")
+    os.makedirs(artifacts_dir, exist_ok=True)
+    file_path = os.path.join(artifacts_dir, f"{job_id}_{file.filename}")
     
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)

@@ -75,20 +75,22 @@ class YOLOWorker:
         dummy_input = torch.randn(batch_size, 3, 128, 128).to(self.device)
         dummy_target = torch.randint(0, 10, (batch_size,)).to(self.device)
 
-        # Modest matmul to give a visible GPU utilisation blip (~300MB VRAM footprint)
-        compute_A = torch.randn(4096, 4096, device=self.device)
-        compute_B = torch.randn(4096, 4096, device=self.device)
+        # Intense matmul to give a strong, sustained GPU utilisation blip (~800MB VRAM footprint)
+        compute_A = torch.randn(8192, 8192, device=self.device)
+        compute_B = torch.randn(8192, 8192, device=self.device)
 
         for epoch in range(start_epoch, total_epochs + 1):
             try:
-                for step in range(10):  # short loop — stays light
-                    _ = torch.matmul(compute_A, compute_B)
+                for step in range(50):  # 50 batches per epoch to sustain load
+                    # Perform a few heavy matmuls per step to peg the GPU compute
+                    for _ in range(3):
+                        _ = torch.matmul(compute_A, compute_B)
+                    
                     self.optimizer.zero_grad()
                     output = self.model(dummy_input)
                     loss = self.criterion(output, dummy_target)
                     loss.backward()
                     self.optimizer.step()
-                    time.sleep(0.02)
                 
                 print(f"[Worker] Epoch {epoch}/{total_epochs} completed. Loss: {loss.item():.4f}")
                 self._save_checkpoint(epoch)

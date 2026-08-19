@@ -42,11 +42,22 @@ class YOLOWorker:
         self.criterion = nn.CrossEntropyLoss()
 
     def run(self):
-        print(f"[Worker] Starting Small Workload for job {self.job_id} on {self.device}")
+        print(f"[Worker] Starting Dynamic Workload for job {self.job_id} on {self.device}")
         total_epochs = self.job_config.get('epochs', 10)
-        batch_size = self.job_config.get('batch_size', 16)
-        print(f"[Worker] Using Batch Size: {batch_size}")
+        vram_required = self.job_config.get('vram_required_gb', 4.0)
         
+        print(f"[Worker] Simulating workload for {vram_required} GB VRAM...")
+        
+        # 1. Allocate a dummy VRAM payload to exactly match requested VRAM footprint (using 75% as safe margin)
+        target_gb = vram_required * 0.75
+        num_floats = int(target_gb * (1024**3) / 4)
+        try:
+            self.vram_payload = torch.ones(num_floats, dtype=torch.float32, device=self.device)
+            print(f"[Worker] Reserved {target_gb:.1f} GB of VRAM payload successfully.")
+        except RuntimeError:
+            print(f"[Worker] WARNING: Could not reserve full VRAM. Fallback to smaller payload.")
+            self.vram_payload = None
+            
         start_epoch = 1
         existing_checkpoints = []
         if os.path.exists(self.checkpoint_dir):
@@ -69,18 +80,28 @@ class YOLOWorker:
             except Exception as e:
                 print(f"[Worker] Failed to load checkpoint: {e}")
 
-        dummy_input = torch.randn(batch_size, 3, 32, 32).to(self.device)
-        dummy_target = torch.randint(0, 10, (batch_size,)).to(self.device)
+        # Tiny model inputs to generate a valid .pt file
+        dummy_input = torch.randn(16, 3, 32, 32).to(self.device)
+        dummy_target = torch.randint(0, 10, (16,)).to(self.device)
+        
+        # Massive compute tensors to drive GPU Utilization to 90%+
+        compute_matrix_A = torch.randn(4096, 4096, device=self.device)
+        compute_matrix_B = torch.randn(4096, 4096, device=self.device)
 
         for epoch in range(start_epoch, total_epochs + 1):
             try:
-                for step in range(5): # Reduced steps per epoch for fast simulation
+                for step in range(50): # Enough steps to visibly spike GPU usage
+                    # Heavy Compute Math (saturates CUDA cores)
+                    _ = torch.matmul(compute_matrix_A, compute_matrix_B)
+                    
+                    # Backprop for the dummy file
                     self.optimizer.zero_grad()
                     output = self.model(dummy_input)
                     loss = self.criterion(output, dummy_target)
                     loss.backward()
                     self.optimizer.step()
-                    time.sleep(0.05) 
+                    
+                    time.sleep(0.01) # Yield slightly so OS doesn't freeze
                 
                 print(f"[Worker] Epoch {epoch}/{total_epochs} completed. Loss: {loss.item():.4f}")
                 self._save_checkpoint(epoch)
@@ -92,7 +113,7 @@ class YOLOWorker:
                 break
             except RuntimeError as e:
                 if "out of memory" in str(e).lower():
-                    print(f"[Worker] OUT OF MEMORY ERROR! GPU attempted to exceed the 5 GB hard limit.")
+                    print(f"[Worker] OUT OF MEMORY ERROR! GPU attempted to exceed the hard limit.")
                     if torch.cuda.is_available(): torch.cuda.empty_cache()
                 else: print(f"[Worker] RuntimeError: {e}")
                 break

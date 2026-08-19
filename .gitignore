@@ -82,3 +82,6 @@ scratch_*.py
 tmp/
 temp/
 GPUShare_Outputs/
+
+# ─── Coordinator job artifact zips (runtime outputs) ──────────────────────
+coordinator/artifacts/

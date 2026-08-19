@@ -8,27 +8,20 @@ import torch.optim as optim
 
 
 
-class MediumTrainingModel(nn.Module):
+class SmallVisionModel(nn.Module):
     def __init__(self):
         super().__init__()
-        # 3 conv layers + 2 large FC layers → ~21M params → ~85MB .pt file
-        # This makes VRAM usage clearly visible (~300MB) in Task Manager
+        # Lightweight 2-conv model — fast epochs, tiny .pt, light on VRAM
         self.features = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(64),
+            nn.Conv2d(3, 16, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
-            nn.Conv2d(64, 128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
+            nn.MaxPool2d(2),
+            nn.Conv2d(16, 32, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
-            nn.Conv2d(128, 256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
-            nn.AdaptiveAvgPool2d((4, 4))  # always outputs 256x4x4 = 4096 features
+            nn.AdaptiveAvgPool2d((1, 1))
         )
         self.classifier = nn.Sequential(
-            nn.Linear(4096, 4096),
-            nn.ReLU(inplace=True),
-            nn.Linear(4096, 1000)
+            nn.Linear(32, 10)
         )
 
     def forward(self, x):
@@ -44,7 +37,7 @@ class YOLOWorker:
         self.job_id = job_id
         
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model = MediumTrainingModel().to(self.device)
+        self.model = SmallVisionModel().to(self.device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=0.001)
         self.criterion = nn.CrossEntropyLoss()
 
@@ -76,41 +69,24 @@ class YOLOWorker:
             except Exception as e:
                 print(f"[Worker] Failed to load checkpoint: {e}")
 
-        # Use 64x64 inputs — AdaptiveAvgPool always collapses to 4x4 regardless of input size
-        dummy_input = torch.randn(batch_size, 3, 64, 64).to(self.device)
-        dummy_target = torch.randint(0, 1000, (batch_size,)).to(self.device)
+        # Small dummy tensors — light on VRAM, fast forward pass
+        dummy_input = torch.randn(batch_size, 3, 32, 32).to(self.device)
+        dummy_target = torch.randint(0, 10, (batch_size,)).to(self.device)
 
-        # Compute matrices sized to produce a noticeable but safe GPU utilisation spike (~30-55%)
-        compute_A = torch.randn(3072, 3072, device=self.device)
-        compute_B = torch.randn(3072, 3072, device=self.device)
-
-        # Allocate a VRAM buffer so dedicated GPU memory shows ~65% full in Task Manager
-        # Dynamically calculated: 65% of total VRAM minus model + optimizer overhead
-        self.vram_buffer = None
-        if torch.cuda.is_available():
-            try:
-                total_vram = torch.cuda.get_device_properties(0).total_memory
-                target_bytes = int(total_vram * 0.65)
-                overhead_bytes = 500 * 1024 * 1024  # ~500MB for model + optimizer + activations
-                buffer_bytes = max(0, target_bytes - overhead_bytes)
-                num_floats = buffer_bytes // 4
-                self.vram_buffer = torch.empty(num_floats, dtype=torch.float32, device=self.device)
-                print(f"[Worker] VRAM buffer: {buffer_bytes / (1024**3):.2f} GB allocated (targeting ~65% of {total_vram / (1024**3):.1f} GB total)")
-            except RuntimeError:
-                print("[Worker] WARNING: Could not allocate full VRAM buffer — continuing with partial")
+        # Modest matmul to give a small but visible GPU utilisation blip
+        compute_A = torch.randn(2048, 2048, device=self.device)
+        compute_B = torch.randn(2048, 2048, device=self.device)
 
         for epoch in range(start_epoch, total_epochs + 1):
             try:
-                for step in range(30): # 30 steps keeps utilisation clearly visible without going overboard
-                    # Matrix multiply saturates CUDA cores without touching much extra VRAM
+                for step in range(10):  # short loop — stays light
                     _ = torch.matmul(compute_A, compute_B)
-                    
                     self.optimizer.zero_grad()
                     output = self.model(dummy_input)
                     loss = self.criterion(output, dummy_target)
                     loss.backward()
                     self.optimizer.step()
-                    time.sleep(0.01) # slight yield so OS stays responsive
+                    time.sleep(0.02)
                 
                 print(f"[Worker] Epoch {epoch}/{total_epochs} completed. Loss: {loss.item():.4f}")
                 self._save_checkpoint(epoch)
@@ -140,7 +116,6 @@ class YOLOWorker:
             del dummy_target
             del compute_A
             del compute_B
-            del self.vram_buffer
             del self.model
             del self.optimizer
         except Exception:

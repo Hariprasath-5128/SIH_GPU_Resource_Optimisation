@@ -303,17 +303,7 @@
         const vramInput = document.getElementById('vram');
         const batchSizeInput = document.getElementById('batchSize');
         
-        // Auto-adjust batch size based on VRAM (64 batch size per 1 GB of VRAM)
-        vramInput.addEventListener('input', () => {
-            const vram = parseFloat(vramInput.value) || 0;
-            batchSizeInput.value = Math.max(1, Math.floor(vram * 64));
-        });
-        
-        // Make it read-only so it's fully auto-adjusted for the user
-        batchSizeInput.readOnly = true;
-        batchSizeInput.style.backgroundColor = 'var(--surface)';
-        batchSizeInput.style.color = 'var(--text-muted)';
-        batchSizeInput.style.cursor = 'not-allowed';
+        // Allowed manual editing of Batch Size by removing readOnly lock
 
         submitBtn.addEventListener('click', () => {
             submitBtn.innerHTML = 'Submitting...';

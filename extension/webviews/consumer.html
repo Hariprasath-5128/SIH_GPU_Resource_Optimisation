@@ -319,6 +319,8 @@
             submitBtn.innerHTML = 'Submitting...';
             submitBtn.disabled = true;
             
+            const userEpochs = parseInt(document.getElementById('epochs').value) || 10;
+            
             vscode.postMessage({
                 type: 'submitJob',
                 data: {
@@ -327,7 +329,8 @@
                     model_name: 'yolov8n.pt',
                     vram_required_gb: parseFloat(document.getElementById('vram').value),
                     max_budget: parseFloat(document.getElementById('budget').value),
-                    estimated_minutes: parseInt(document.getElementById('epochs').value) * 2,
+                    estimated_minutes: userEpochs * 2,
+                    epochs: userEpochs,
                     batch_size: parseInt(document.getElementById('batchSize').value) || 256
                 }
             });

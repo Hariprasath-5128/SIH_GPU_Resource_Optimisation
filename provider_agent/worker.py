@@ -1,4 +1,4 @@
-﻿import time
+import time
 import os
 import hashlib
 import requests
@@ -6,39 +6,26 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-if torch.cuda.is_available():
-    try:
-        total_memory = torch.cuda.get_device_properties(0).total_memory
-        five_gb = 5 * 1024 * 1024 * 1024
-        fraction = min(five_gb / total_memory, 1.0)
-        torch.cuda.set_per_process_memory_fraction(fraction, 0)
-        print(f"[Worker] VRAM Restricted to a maximum of 5.0 GB ({fraction*100:.1f}%)")
-    except Exception as e:
-        print(f"[Worker] Could not set VRAM limit: {e}")
 
-class MediumVisionModel(nn.Module):
+
+class SmallVisionModel(nn.Module):
     def __init__(self):
         super().__init__()
-        layers = []
-        in_channels = 3
-        for _ in range(4): 
-            layers.append(nn.Conv2d(in_channels, 256, kernel_size=3, padding=1))
-            layers.append(nn.BatchNorm2d(256))
-            layers.append(nn.ReLU(inplace=True))
-            in_channels = 256
-            
-        self.features = nn.Sequential(*layers)
-        self.pool = nn.AdaptiveAvgPool2d((1, 1))
-        self.classifier = nn.Sequential(
-            nn.Linear(256, 512),
+        # A very lightweight model for quick testing without stressing the GPU
+        self.features = nn.Sequential(
+            nn.Conv2d(3, 16, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
-            nn.Dropout(0.5),
-            nn.Linear(512, 1000)
+            nn.MaxPool2d(2),
+            nn.Conv2d(16, 32, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.AdaptiveAvgPool2d((1, 1))
+        )
+        self.classifier = nn.Sequential(
+            nn.Linear(32, 10)
         )
     
     def forward(self, x):
         x = self.features(x)
-        x = self.pool(x)
         x = torch.flatten(x, 1)
         return self.classifier(x)
 
@@ -50,14 +37,14 @@ class YOLOWorker:
         self.job_id = job_id
         
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model = MediumVisionModel().to(self.device)
+        self.model = SmallVisionModel().to(self.device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=0.001)
         self.criterion = nn.CrossEntropyLoss()
 
     def run(self):
-        print(f"[Worker] Starting Medium Workload for job {self.job_id} on {self.device}")
+        print(f"[Worker] Starting Small Workload for job {self.job_id} on {self.device}")
         total_epochs = self.job_config.get('epochs', 10)
-        batch_size = self.job_config.get('batch_size', 32)
+        batch_size = self.job_config.get('batch_size', 16)
         print(f"[Worker] Using Batch Size: {batch_size}")
         
         start_epoch = 1
@@ -82,12 +69,12 @@ class YOLOWorker:
             except Exception as e:
                 print(f"[Worker] Failed to load checkpoint: {e}")
 
-        dummy_input = torch.randn(batch_size, 3, 224, 224).to(self.device)
-        dummy_target = torch.randint(0, 1000, (batch_size,)).to(self.device)
+        dummy_input = torch.randn(batch_size, 3, 32, 32).to(self.device)
+        dummy_target = torch.randint(0, 10, (batch_size,)).to(self.device)
 
         for epoch in range(start_epoch, total_epochs + 1):
             try:
-                for step in range(30):
+                for step in range(5): # Reduced steps per epoch for fast simulation
                     self.optimizer.zero_grad()
                     output = self.model(dummy_input)
                     loss = self.criterion(output, dummy_target)

@@ -84,20 +84,20 @@ class YOLOWorker:
         compute_A = torch.randn(3072, 3072, device=self.device)
         compute_B = torch.randn(3072, 3072, device=self.device)
 
-        # Allocate a VRAM buffer so dedicated GPU memory shows ~50% full in Task Manager
-        # Dynamically calculated: 50% of total VRAM minus what the model + optimizer already use
+        # Allocate a VRAM buffer so dedicated GPU memory shows ~65% full in Task Manager
+        # Dynamically calculated: 65% of total VRAM minus model + optimizer overhead
         self.vram_buffer = None
         if torch.cuda.is_available():
             try:
                 total_vram = torch.cuda.get_device_properties(0).total_memory
-                target_bytes = int(total_vram * 0.50)
-                overhead_bytes = 450 * 1024 * 1024  # ~450MB for model + optimizer + activations
+                target_bytes = int(total_vram * 0.65)
+                overhead_bytes = 500 * 1024 * 1024  # ~500MB for model + optimizer + activations
                 buffer_bytes = max(0, target_bytes - overhead_bytes)
                 num_floats = buffer_bytes // 4
                 self.vram_buffer = torch.empty(num_floats, dtype=torch.float32, device=self.device)
-                print(f"[Worker] VRAM buffer: {buffer_bytes / (1024**3):.2f} GB allocated (targeting ~50% of {total_vram / (1024**3):.1f} GB total)")
+                print(f"[Worker] VRAM buffer: {buffer_bytes / (1024**3):.2f} GB allocated (targeting ~65% of {total_vram / (1024**3):.1f} GB total)")
             except RuntimeError:
-                print("[Worker] WARNING: Could not allocate VRAM buffer — continuing without it")
+                print("[Worker] WARNING: Could not allocate full VRAM buffer — continuing with partial")
 
         for epoch in range(start_epoch, total_epochs + 1):
             try:

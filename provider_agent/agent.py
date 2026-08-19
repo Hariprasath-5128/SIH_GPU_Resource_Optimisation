@@ -154,10 +154,21 @@ class ProviderAgent:
         def run_worker():
             checkpoint_dir = job_data.get('checkpoint_dir', f"./checkpoints/job_{job_id}")
             os.makedirs(checkpoint_dir, exist_ok=True)
+            
+            # Clear any stale .pt files from a previous run of this job
+            # so the consumer only receives the current job's checkpoints
+            for f in os.listdir(checkpoint_dir):
+                if f.endswith('.pt'):
+                    try:
+                        os.remove(os.path.join(checkpoint_dir, f))
+                    except Exception:
+                        pass
+            
             job_config = {
                 "model":             job_data.get('model_name', 'yolov8n.pt'),
                 "epochs":            job_data.get('epochs', 10),
-                # 'dataset' is the key worker.py reads (was wrongly 'data' before)
+                "vram_required_gb":  job_data.get('vram_required_gb', 4.0),
+                "batch_size":        job_data.get('batch_size', 16),
                 "dataset":           job_data.get('dataset', None),
                 "resume_epoch":      job_data.get('resume_epoch', 0),
                 "resume_checkpoint": job_data.get('resume_checkpoint'),
@@ -191,7 +202,9 @@ class ProviderAgent:
                     os.makedirs(temp_dir, exist_ok=True)
                     zip_base = os.path.join(temp_dir, f"job_{job_id}")
                     zip_file = f"{zip_base}.zip"
-                    print(f"[Agent] Zipping all checkpoints + final model to {zip_file}...")
+                    # List what will be zipped so we can verify in the logs
+                    files_to_zip = [f for f in os.listdir(checkpoint_dir) if f.endswith('.pt')]
+                    print(f"[Agent] Zipping {len(files_to_zip)} file(s): {files_to_zip}")
                     shutil.make_archive(zip_base, 'zip', root_dir=checkpoint_dir)
                 
                 if zip_file and os.path.exists(zip_file):

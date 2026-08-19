@@ -7,7 +7,7 @@ from typing import List, Optional
 
 import os
 import shutil
-from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File, BackgroundTasks
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -173,10 +173,7 @@ async def register_node(req: NodeRegisterReq, db: Session = Depends(get_db)):
     db.add(node)
     db.commit()
     
-    await manager.broadcast({
-        "event": "node_registered",
-        "node_id": node_id
-    })
+    await manager.broadcast({"event": "node_registered", "node_id": node_id})
     return {"node_id": node_id, "status": "online"}
 
 class HeartbeatReq(BaseModel):
@@ -191,34 +188,26 @@ class HeartbeatReq(BaseModel):
     available_vram_gb: float
 
 @app.post("/api/nodes/heartbeat")
-async def node_heartbeat(req: HeartbeatReq, db: Session = Depends(get_db)):
-    import asyncio
-    loop = asyncio.get_event_loop()
-    
-    def _write():
-        node = db.query(GpuNode).filter(GpuNode.node_id == req.node_id).first()
-        if not node:
-            return False
-        node.last_heartbeat = datetime.utcnow()
-        node.status = "online"
-        metric = NodeMetric(
-            node_id=req.node_id,
-            gpu_utilization=req.gpu_utilization,
-            vram_used_gb=req.vram_used_gb,
-            temperature=req.temperature,
-            power_watts=req.power_watts,
-            cpu_utilization=req.cpu_utilization,
-            ram_used_gb=req.ram_used_gb,
-            network_mbps=req.network_mbps,
-            available_vram_gb=req.available_vram_gb
-        )
-        db.add(metric)
-        db.commit()
-        return True
-    
-    found = await loop.run_in_executor(None, _write)
-    if not found:
+def node_heartbeat(req: HeartbeatReq, db: Session = Depends(get_db)):
+    """Sync endpoint — FastAPI runs this in a thread pool, never blocks the event loop."""
+    node = db.query(GpuNode).filter(GpuNode.node_id == req.node_id).first()
+    if not node:
         raise HTTPException(status_code=404, detail="Node not found")
+    node.last_heartbeat = datetime.utcnow()
+    node.status = "online"
+    metric = NodeMetric(
+        node_id=req.node_id,
+        gpu_utilization=req.gpu_utilization,
+        vram_used_gb=req.vram_used_gb,
+        temperature=req.temperature,
+        power_watts=req.power_watts,
+        cpu_utilization=req.cpu_utilization,
+        ram_used_gb=req.ram_used_gb,
+        network_mbps=req.network_mbps,
+        available_vram_gb=req.available_vram_gb
+    )
+    db.add(metric)
+    db.commit()
     return {"status": "ok"}
 
 @app.get("/api/nodes")
@@ -344,15 +333,10 @@ async def start_job(job_id: str, db: Session = Depends(get_db)):
     job = db.query(Job).filter(Job.job_id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    
     job.status = "EXECUTING"
     job.started_at = datetime.utcnow()
     db.commit()
-    
-    await manager.broadcast({
-        "event": "job_started",
-        "job_id": job_id
-    })
+    await manager.broadcast({"event": "job_started", "job_id": job_id})
     return {"status": "EXECUTING"}
 
 class ProgressReq(BaseModel):
@@ -378,7 +362,7 @@ class CheckpointReq(BaseModel):
     size_bytes: int
 
 @app.post("/api/jobs/{job_id}/checkpoint")
-async def save_checkpoint(job_id: str, req: CheckpointReq, db: Session = Depends(get_db)):
+def save_checkpoint(job_id: str, req: CheckpointReq, db: Session = Depends(get_db)):
     chk = Checkpoint(
         job_id=job_id,
         epoch=req.epoch,
@@ -394,19 +378,15 @@ class JobCompleteReq(BaseModel):
     output_hash: str
 
 @app.post("/api/jobs/{job_id}/upload_output")
-async def upload_job_output(job_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
+def upload_job_output(job_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
     job = db.query(Job).filter(Job.job_id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    
-    # Use absolute path so download_output can always find the file regardless of cwd
     artifacts_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "artifacts")
     os.makedirs(artifacts_dir, exist_ok=True)
     file_path = os.path.join(artifacts_dir, f"{job_id}_{file.filename}")
-    
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-        
     job.output_file_path = file_path
     db.commit()
     return {"status": "ok", "file_path": file_path}
@@ -431,34 +411,23 @@ async def complete_job(job_id: str, req: JobCompleteReq, db: Session = Depends(g
     job = db.query(Job).filter(Job.job_id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    
     job.completed_at = datetime.utcnow()
     job.output_hash = req.output_hash
-    
-    # Compute duration
     if job.started_at:
         job.compute_seconds = (job.completed_at - job.started_at).total_seconds()
     else:
         job.compute_seconds = 0
-    
-    # Simple Verification: Check if hashes match (in reality more complex)
-    # Let's say it's verified if input and output exist
     job.verified = bool(job.input_hash and req.output_hash)
-    
     node = db.query(GpuNode).filter(GpuNode.node_id == job.node_id).first()
-    
     if job.verified and node:
         job.actual_cost = (job.compute_seconds / 3600.0) * node.price_per_hour
-        
         consumer = db.query(User).filter(User.user_id == job.consumer_id).first()
-        provider = db.query(User).filter(User.user_id == "provider_01").first() # Assuming mapping via node ownership in real app
-        
+        provider = db.query(User).filter(User.user_id == "provider_01").first()
         if consumer and provider:
             consumer.credits -= job.actual_cost
             provider_cut = job.actual_cost * 0.90
             platform_fee = job.actual_cost * 0.10
             provider.credits += provider_cut
-            
             txn = Transaction(
                 job_id=job.job_id,
                 provider_id=provider.user_id,
@@ -469,21 +438,15 @@ async def complete_job(job_id: str, req: JobCompleteReq, db: Session = Depends(g
                 status="COMPLETED"
             )
             db.add(txn)
-        
         node.trust_score = min(100.0, node.trust_score + 2.0)
         node.jobs_completed += 1
         node.jobs_total += 1
     elif node:
         node.trust_score = max(0.0, node.trust_score - 5.0)
         node.jobs_total += 1
-    
     job.status = "COMPLETED"
     db.commit()
-    
-    await manager.broadcast({
-        "event": "job_completed",
-        "job_id": job_id
-    })
+    await manager.broadcast({"event": "job_completed", "job_id": job_id})
     return {"status": "COMPLETED", "verified": job.verified}
 
 @app.post("/api/jobs/{job_id}/interrupt")
@@ -491,14 +454,9 @@ async def interrupt_job(job_id: str, db: Session = Depends(get_db)):
     job = db.query(Job).filter(Job.job_id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    
     job.status = "INTERRUPTED"
     db.commit()
-    
-    await manager.broadcast({
-        "event": "job_interrupted",
-        "job_id": job_id
-    })
+    await manager.broadcast({"event": "job_interrupted", "job_id": job_id})
     return {"status": "INTERRUPTED"}
 
 @app.get("/api/jobs/{job_id}/checkpoints")

@@ -325,7 +325,30 @@ def submit_job(req: JobSubmitReq, db: Session = Depends(get_db)):
 
 @app.get("/api/jobs")
 def list_jobs(db: Session = Depends(get_db)):
-    return db.query(Job).all()
+    jobs = db.query(Job).all()
+    result = []
+    for j in jobs:
+        output_ready = bool(
+            j.output_file_path and os.path.exists(j.output_file_path)
+        )
+        result.append({
+            "job_id":          j.job_id,
+            "consumer_id":     j.consumer_id,
+            "node_id":         j.node_id,
+            "workload_type":   j.workload_type,
+            "model_name":      j.model_name,
+            "vram_required_gb":j.vram_required_gb,
+            "max_budget":      j.max_budget,
+            "batch_size":      j.batch_size,
+            "status":          j.status,
+            "estimated_minutes":j.estimated_minutes,
+            "actual_cost":     j.actual_cost,
+            "started_at":      j.started_at.isoformat() if j.started_at else None,
+            "completed_at":    j.completed_at.isoformat() if j.completed_at else None,
+            "verified":        j.verified,
+            "has_output":      output_ready,
+        })
+    return result
 
 @app.get("/api/jobs/{job_id}")
 def get_job(job_id: str, db: Session = Depends(get_db)):
